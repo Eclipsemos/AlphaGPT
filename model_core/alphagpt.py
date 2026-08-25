@@ -71,7 +71,7 @@ class StableRankMonitor:
     """Monitor the effective rank (stable rank) of model parameters."""
     def __init__(self, model, target_keywords=None):
         self.model = model
-        self.target_keywords = target_keywords or ["q_proj", "k_proj", "attention"]
+        self.target_keywords = target_keywords or ["in_proj_weight", "out_proj.weight", "attention"]
         self.history = []
     
     @torch.no_grad()

@@ -18,8 +18,8 @@ This list is ordered by research reliability, not by visual polish.
 - [x] Add deterministic seeds and record the full configuration with each run.
 - [ ] Constrain formula generation to valid expression trees instead of penalizing arbitrary invalid token sequences.
 - [ ] Run multiple seeds and report confidence intervals rather than a single best formula.
-- [ ] Align signal timestamps and forward returns explicitly, with tests covering off-by-one errors.
-- [ ] Fix or remove the LoRD monitor/regularizer until its parameter targeting matches the actual model modules.
+- [x] Align signal timestamps and forward returns explicitly, with tests covering off-by-one errors.
+- [x] Fix or remove the LoRD monitor/regularizer until its parameter targeting matches the actual model modules.
 - [x] Add a command that evaluates an existing formula without retraining.
 
 ## P2: Make the Tool Easier to Use
@@ -28,7 +28,8 @@ This list is ordered by research reliability, not by visual polish.
 - [ ] Add a single research command that initializes the database, refreshes data, and runs validation checks.
 - [ ] Add dashboard views for training history and backtest metrics.
 - [ ] Show data freshness, row counts, and API-rate-limit status in the dashboard.
-- [ ] Add automated tests for the data loader, VM operators, backtest accounting, and database queries.
+- [x] Add automated tests for the data loader, VM operators, and backtest accounting.
+- [ ] Add automated tests for database queries.
 
 ## P3: Paper Trading Only
 

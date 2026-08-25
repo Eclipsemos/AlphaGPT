@@ -80,6 +80,23 @@ def inspect_market_data(frame: pd.DataFrame) -> DataQualityReport:
     )
 
 
+def compute_forward_returns(open_prices: torch.Tensor) -> torch.Tensor:
+    """Return from the next bar's open to the following bar's open.
+
+    A signal observed at bar ``t`` is assumed to enter at ``t+1`` and hold
+    through ``t+2``. The final two labels are purged because they cross the
+    available data boundary.
+    """
+    next_open = torch.roll(open_prices, -1, dims=1)
+    exit_open = torch.roll(open_prices, -2, dims=1)
+    valid = (next_open > 0) & (exit_open > 0)
+    ratio = torch.where(valid, exit_open / (next_open + 1e-9), torch.ones_like(next_open))
+    forward_return = torch.where(valid, torch.log(ratio), torch.zeros_like(ratio))
+    forward_return = torch.nan_to_num(forward_return, nan=0.0, posinf=0.0, neginf=0.0)
+    forward_return[:, -2:] = 0.0
+    return forward_return
+
+
 class CryptoDataLoader:
     def __init__(self):
         self.engine = sqlalchemy.create_engine(ModelConfig.DB_URL)
@@ -166,14 +183,7 @@ class CryptoDataLoader:
         self.raw_data_cache = {key: to_tensor(key) for key in ("open", "high", "low", "close", "volume", "liquidity", "fdv")}
         train_end = int(self.raw_data_cache["open"].shape[1] * ModelConfig.TRAIN_RATIO)
         self.feat_tensor = FeatureEngineer.compute_features(self.raw_data_cache, fit_end=train_end)
-        op = self.raw_data_cache["open"]
-        t1 = torch.roll(op, -1, dims=1)
-        t2 = torch.roll(op, -2, dims=1)
-        valid = (t1 > 0) & (t2 > 0)
-        ratio = torch.where(valid, t2 / (t1 + 1e-9), torch.ones_like(t1))
-        self.target_ret = torch.where(valid, torch.log(ratio), torch.zeros_like(ratio))
-        self.target_ret = torch.nan_to_num(self.target_ret, nan=0.0, posinf=0.0, neginf=0.0)
-        self.target_ret[:, -2:] = 0.0
+        self.target_ret = compute_forward_returns(self.raw_data_cache["open"])
         self.splits = self._build_splits(self.feat_tensor.shape[-1])
         self._assign_split_views()
         print(

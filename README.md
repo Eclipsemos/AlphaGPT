@@ -97,6 +97,12 @@ Evaluate an existing formula without retraining:
 python -m model_core.evaluate --formula best_meme_strategy.json
 ```
 
+Run the research-core tests:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
 Inspect the dashboard:
 
 ```bash

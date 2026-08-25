@@ -38,11 +38,11 @@ class AlphaEngine:
                 self.model.named_parameters(),
                 decay_rate=lord_decay_rate,
                 num_iterations=lord_num_iterations,
-                target_keywords=["q_proj", "k_proj", "attention", "qk_norm"]
+                target_keywords=["in_proj_weight", "out_proj.weight", "attention"]
             )
             self.rank_monitor = StableRankMonitor(
                 self.model,
-                target_keywords=["q_proj", "k_proj"]
+                target_keywords=["in_proj_weight", "out_proj.weight", "attention"]
             )
         else:
             self.lord_opt = None
@@ -119,7 +119,7 @@ class AlphaEngine:
         print("🚀 Starting Meme Alpha Mining with LoRD Regularization..." if self.use_lord else "🚀 Starting Meme Alpha Mining...")
         if self.use_lord:
             print(f"   LoRD Regularization enabled")
-            print(f"   Target keywords: ['q_proj', 'k_proj', 'attention', 'qk_norm']")
+            print(f"   Target keywords: ['in_proj_weight', 'out_proj.weight', 'attention']")
         
         pbar = tqdm(range(self.start_step, ModelConfig.TRAIN_STEPS))
         

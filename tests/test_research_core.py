@@ -1,0 +1,65 @@
+import unittest
+
+import torch
+import pandas as pd
+
+from model_core.backtest import MemeBacktest
+from model_core.data_loader import (
+    CryptoDataLoader,
+    compute_forward_returns,
+    inspect_market_data,
+)
+from model_core.vm import StackVM
+
+
+class ResearchCoreTests(unittest.TestCase):
+    def test_forward_return_alignment_and_purge(self):
+        opens = torch.tensor([[10.0, 11.0, 22.0, 44.0, 88.0]])
+        actual = compute_forward_returns(opens)
+        expected = torch.tensor([[torch.log(torch.tensor(22.0 / 11.0)), torch.log(torch.tensor(44.0 / 22.0)), torch.log(torch.tensor(88.0 / 44.0)), 0.0, 0.0]])
+        self.assertTrue(torch.allclose(actual, expected))
+
+    def test_quality_report_detects_bad_rows(self):
+        frame = pd.DataFrame({
+            "time": pd.to_datetime(["2026-01-01", "2026-01-01", "2026-01-02"]),
+            "address": ["A", "A", "B"],
+            "open": [1.0, 1.0, 0.0], "high": [1.0, 1.0, 1.0],
+            "low": [1.0, 1.0, 1.0], "close": [1.0, 1.0, 1.0],
+            "volume": [1.0, 1.0, 1.0], "liquidity": [1.0, 1.0, 1.0],
+            "fdv": [1.0, 1.0, 1.0],
+        })
+        report = inspect_market_data(frame)
+        self.assertEqual(report.duplicate_rows, 1)
+        self.assertEqual(report.nonpositive_price_rows, 1)
+        self.assertTrue(report.has_fatal_errors)
+
+    def test_temporal_split_boundaries(self):
+        loader = CryptoDataLoader.__new__(CryptoDataLoader)
+        split = loader._build_splits(100)
+        self.assertEqual(split.train.stop, 60)
+        self.assertEqual(split.validation.start, 60)
+        self.assertEqual(split.validation.stop, 80)
+        self.assertEqual(split.test.start, 80)
+
+    def test_vm_rejects_invalid_stack_and_executes_valid_formula(self):
+        features = torch.arange(12.0).reshape(1, 2, 6)
+        vm = StackVM()
+        self.assertIsNone(vm.execute([6], features))
+        result = vm.execute([0, 1, 6], features)
+        self.assertTrue(torch.equal(result, features[:, 0, :] + features[:, 1, :]))
+
+    def test_backtest_report_contains_auditable_metrics(self):
+        raw = {
+            "liquidity": torch.full((1, 6), 1_000_000.0),
+            "close": torch.ones((1, 6)),
+        }
+        target = torch.tensor([[0.01, -0.01, 0.02, 0.0, 0.0, 0.0]])
+        factors = torch.full((1, 6), 10.0)
+        report = MemeBacktest().evaluate_report(factors, raw, target)
+        self.assertIn("sharpe", report.as_dict())
+        self.assertGreaterEqual(report.trade_count, 1)
+        self.assertTrue(torch.isfinite(torch.tensor(list(report.as_dict().values()))).all())
+
+
+if __name__ == "__main__":
+    unittest.main()
