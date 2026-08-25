@@ -15,7 +15,7 @@ class BirdeyeFetcher:
 
     async def get_trending_tokens(self, limit=100):
         url = f"{Config.BIRDEYE_BASE_URL}/defi/token_trending?sort_by=rank&sort_type=asc&offset=0&limit={limit}"
-        async with aiohttp.ClientSession(headers=self.headers) as session:
+        async with aiohttp.ClientSession(headers=self.headers, trust_env=True) as session:
             try:
                 async with session.get(url) as resp:
                     if resp.status == 200:

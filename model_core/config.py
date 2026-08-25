@@ -1,6 +1,9 @@
 import torch
 import os
+from dotenv import load_dotenv
 from .vocab import FORMULA_VOCAB
+
+load_dotenv()
 
 class ModelConfig:
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

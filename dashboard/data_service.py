@@ -1,10 +1,43 @@
 import json
 import os
+from types import SimpleNamespace
+from urllib.request import Request, urlopen
 import pandas as pd
 import sqlalchemy
 from dotenv import load_dotenv
 from solders.pubkey import Pubkey
-from solana.rpc.api import Client
+
+try:
+    # solana-py versions before 0.40 exposed this synchronous client.
+    from solana.rpc.api import Client as _SolanaClient
+except ModuleNotFoundError:
+    _SolanaClient = None
+
+
+class _JsonRpcClient:
+    """Small synchronous fallback for solana-py versions without rpc.api."""
+
+    def __init__(self, endpoint):
+        self.endpoint = endpoint
+
+    def get_balance(self, pubkey):
+        payload = json.dumps({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getBalance",
+            "params": [str(pubkey)],
+        }).encode("utf-8")
+        request = Request(
+            self.endpoint,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(request, timeout=10) as response:
+            result = json.load(response)
+        if "error" in result:
+            raise RuntimeError(result["error"])
+        return SimpleNamespace(value=result["result"]["value"])
 
 load_dotenv()
 
@@ -16,7 +49,7 @@ class DashboardService:
         db_name = os.getenv("DB_NAME", "crypto_quant")
         self.engine = sqlalchemy.create_engine(f"postgresql://{db_user}:{db_pass}@{db_host}:5432/{db_name}")
         rpc_url = os.getenv("QUICKNODE_RPC_URL", "https://api.mainnet-beta.solana.com")
-        self.rpc = Client(rpc_url)
+        self.rpc = _SolanaClient(rpc_url) if _SolanaClient else _JsonRpcClient(rpc_url)
         self.wallet_addr = self._get_wallet_address()
 
     def _get_wallet_address(self):
@@ -64,7 +97,11 @@ class DashboardService:
         SELECT t.symbol, o.address, o.close, o.volume, o.liquidity, o.fdv, o.time
         FROM ohlcv o
         JOIN tokens t ON o.address = t.address
-        WHERE o.time = (SELECT MAX(time) FROM ohlcv)
+        WHERE o.time = (
+            SELECT MAX(latest.time)
+            FROM ohlcv AS latest
+            WHERE latest.address = o.address
+        )
         ORDER BY o.liquidity DESC
         LIMIT {limit}
         """

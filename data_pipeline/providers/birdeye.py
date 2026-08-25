@@ -32,7 +32,7 @@ class BirdeyeProvider(DataProvider):
             "limit": str(limit)
         }
         
-        async with aiohttp.ClientSession(headers=self.headers) as session:
+        async with aiohttp.ClientSession(headers=self.headers, trust_env=True) as session:
             try:
                 async with session.get(url, params=params) as resp:
                     if resp.status == 200:

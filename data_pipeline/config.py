@@ -21,4 +21,4 @@ class Config:
     BIRDEYE_IS_PAID = True
     USE_DEXSCREENER = False
     CONCURRENCY = 20
-    HISTORY_DAYS = 7
+    HISTORY_DAYS = 30

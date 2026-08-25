@@ -21,7 +21,8 @@ class DataManager:
 
     async def pipeline_sync_daily(self):
         logger.info("Step 1: Discovering trending tokens...")
-        limit = 500 if Config.BIRDEYE_IS_PAID else 100
+        # Birdeye's trending endpoint currently accepts at most 50 tokens.
+        limit = min(50, 500 if Config.BIRDEYE_IS_PAID else 100)
         candidates = await self.birdeye.get_trending_tokens(limit=limit)
         
         logger.info(f"Raw candidates found: {len(candidates)}")
@@ -48,7 +49,7 @@ class DataManager:
 
         logger.info(f"Step 4: Fetching OHLCV for {len(selected_tokens)} tokens...")
         
-        async with aiohttp.ClientSession(headers=self.birdeye.headers) as session:
+        async with aiohttp.ClientSession(headers=self.birdeye.headers, trust_env=True) as session:
             tasks = []
             for t in selected_tokens:
                 tasks.append(self.birdeye.get_token_history(

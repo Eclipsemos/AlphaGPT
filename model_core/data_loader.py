@@ -31,7 +31,8 @@ class CryptoDataLoader:
         def to_tensor(col):
             pivot = df.pivot(index='time', columns='address', values=col)
             pivot = pivot.reindex(columns=self.addresses)
-            pivot = pivot.fillna(method='ffill').fillna(0.0)
+            # Missing/zero market values cannot produce meaningful log returns.
+            pivot = pivot.mask(pivot <= 0).ffill().bfill().fillna(0.0)
             return torch.tensor(pivot.values.T, dtype=torch.float32, device=ModelConfig.DEVICE)
         self.raw_data_cache = {
             'open': to_tensor('open'),
@@ -46,6 +47,9 @@ class CryptoDataLoader:
         op = self.raw_data_cache['open']
         t1 = torch.roll(op, -1, dims=1)
         t2 = torch.roll(op, -2, dims=1)
-        self.target_ret = torch.log(t2 / (t1 + 1e-9))
+        valid = (t1 > 0) & (t2 > 0)
+        ratio = torch.where(valid, t2 / (t1 + 1e-9), torch.ones_like(t1))
+        self.target_ret = torch.where(valid, torch.log(ratio), torch.zeros_like(ratio))
+        self.target_ret = torch.nan_to_num(self.target_ret, nan=0.0, posinf=0.0, neginf=0.0)
         self.target_ret[:, -2:] = 0.0
         print(f"Data Ready. Shape: {self.feat_tensor.shape}")

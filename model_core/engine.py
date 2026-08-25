@@ -73,6 +73,8 @@ class AlphaEngine:
             
             for _ in range(ModelConfig.MAX_FORMULA_LEN):
                 logits, _, _ = self.model(inp)
+                if not torch.isfinite(logits).all():
+                    raise RuntimeError("Model produced non-finite logits")
                 dist = Categorical(logits=logits)
                 action = dist.sample()
                 
@@ -98,7 +100,7 @@ class AlphaEngine:
                     continue
                 
                 score, ret_val = self.bt.evaluate(res, self.loader.raw_data_cache, self.loader.target_ret)
-                rewards[i] = score
+                rewards[i] = score if torch.isfinite(score) else -10.0
                 
                 if score.item() > self.best_score:
                     self.best_score = score.item()
@@ -113,10 +115,15 @@ class AlphaEngine:
                 loss += -log_probs[t] * adv
             
             loss = loss.mean()
+
+            if not torch.isfinite(loss):
+                tqdm.write("[!] Non-finite loss; skipping optimizer step")
+                continue
             
             # Gradient step
             self.opt.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             self.opt.step()
             
             # Apply Low-Rank Decay regularization
