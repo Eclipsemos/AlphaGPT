@@ -147,7 +147,11 @@ class AlphaEngine:
             
             for i in range(bs):
                 formula = seqs[i].tolist()
-                
+
+                if not self.vm.is_valid_formula(formula):
+                    rewards[i] = -5.0
+                    continue
+
                 res = self.vm.execute(formula, self.loader.train_feat_tensor)
                 
                 if res is None:

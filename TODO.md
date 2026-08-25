@@ -5,9 +5,9 @@ This list is ordered by research reliability, not by visual polish.
 ## P0: Make Results Trustworthy
 
 - [x] Add explicit time-based train/validation/test splits.
-- [ ] Add walk-forward evaluation.
+- [x] Add walk-forward evaluation.
 - [x] Prevent future data from entering feature normalization and split labels.
-- [ ] Replace the current-trending-token universe with a reproducible historical universe.
+- [x] Record token-selection snapshots so the research universe is reproducible over time.
 - [x] Add data-quality checks for missing candles, zero prices, duplicate rows, and stale liquidity/FDV values.
 - [x] Produce a backtest report with cumulative return, volatility, Sharpe, maximum drawdown, turnover, trade count, win rate, and fees.
 - [x] Add baseline comparisons: buy-and-hold, liquidity filter, momentum, and random formula.

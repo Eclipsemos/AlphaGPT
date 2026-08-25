@@ -97,6 +97,12 @@ Evaluate an existing formula without retraining:
 python -m model_core.evaluate --formula best_meme_strategy.json
 ```
 
+Run a simple walk-forward evaluation over unseen temporal windows:
+
+```bash
+python -m model_core.walk_forward --formula best_meme_strategy.json --windows 4
+```
+
 Run the research-core tests:
 
 ```bash

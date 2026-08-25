@@ -52,6 +52,21 @@ class DBManager:
 
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_ohlcv_address ON ohlcv (address);")
 
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS token_snapshots (
+                    snapshot_time TIMESTAMP NOT NULL,
+                    address TEXT NOT NULL,
+                    symbol TEXT,
+                    name TEXT,
+                    decimals INT,
+                    liquidity DOUBLE PRECISION,
+                    fdv DOUBLE PRECISION,
+                    rank INT,
+                    PRIMARY KEY (snapshot_time, address)
+                );
+            """)
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_token_snapshots_address ON token_snapshots (address);")
+
     async def upsert_tokens(self, tokens):
         if not tokens: return
         async with self.pool.acquire() as conn:
@@ -78,3 +93,30 @@ class DBManager:
                 pass # 忽略重复
             except Exception as e:
                 logger.error(f"Batch insert error: {e}")
+
+    async def insert_token_snapshot(self, snapshot_time, tokens):
+        if not tokens:
+            return
+        records = [
+            (
+                snapshot_time,
+                token["address"],
+                token.get("symbol"),
+                token.get("name"),
+                token.get("decimals", 6),
+                float(token.get("liquidity") or 0),
+                float(token.get("fdv") or 0),
+                index,
+            )
+            for index, token in enumerate(tokens)
+        ]
+        async with self.pool.acquire() as conn:
+            await conn.executemany("""
+                INSERT INTO token_snapshots
+                    (snapshot_time, address, symbol, name, decimals, liquidity, fdv, rank)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                ON CONFLICT (snapshot_time, address) DO UPDATE SET
+                    liquidity = EXCLUDED.liquidity,
+                    fdv = EXCLUDED.fdv,
+                    rank = EXCLUDED.rank;
+            """, records)

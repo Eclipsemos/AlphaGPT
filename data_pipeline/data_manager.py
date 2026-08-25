@@ -1,5 +1,6 @@
 import asyncio
 import aiohttp
+from datetime import datetime
 from loguru import logger
 from .config import Config
 from .db_manager import DBManager
@@ -46,6 +47,8 @@ class DataManager:
 
         db_tokens = [(t['address'], t['symbol'], t['name'], t['decimals'], Config.CHAIN) for t in selected_tokens]
         await self.db.upsert_tokens(db_tokens)
+        snapshot_time = datetime.utcnow().replace(second=0, microsecond=0)
+        await self.db.insert_token_snapshot(snapshot_time, selected_tokens)
 
         logger.info(f"Step 4: Fetching OHLCV for {len(selected_tokens)} tokens...")
         

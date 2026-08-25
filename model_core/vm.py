@@ -37,3 +37,19 @@ class StackVM:
                 return None
         except Exception:
             return None
+
+    def is_valid_formula(self, formula_tokens) -> bool:
+        """Return whether tokens form a single valid stack expression."""
+        depth = 0
+        for raw_token in formula_tokens:
+            token = int(raw_token)
+            if token < 0 or token >= FORMULA_VOCAB.size:
+                return False
+            if token < self.feat_offset:
+                depth += 1
+                continue
+            arity = self.arity_map.get(token)
+            if arity is None or depth < arity:
+                return False
+            depth = depth - arity + 1
+        return depth == 1
