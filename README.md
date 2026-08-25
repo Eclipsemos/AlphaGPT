@@ -104,7 +104,8 @@ checkpoint, history, and evaluation report. The batch directory also contains
 `multi_seed_report.json`, one `walk_forward_report.json` per seed, and a
 `batch_report.json` tying the run together. To reuse the current database
 without making Birdeye requests, add `--skip-refresh`; for a quick smoke test,
-use `--steps 2 --batch-size 128 --windows 2`.
+use `--steps 10 --batch-size 1024 --windows 2` (very short runs may not sample
+even one valid formula).
 
 The command writes local experiment artifacts:
 
