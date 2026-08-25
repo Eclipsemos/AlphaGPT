@@ -4,6 +4,7 @@ from tqdm import tqdm
 import json
 import random
 import numpy as np
+from pathlib import Path
 
 from .config import ModelConfig
 from .data_loader import CryptoDataLoader
@@ -12,7 +13,7 @@ from .vm import StackVM
 from .backtest import MemeBacktest
 
 class AlphaEngine:
-    def __init__(self, use_lord_regularization=True, lord_decay_rate=1e-3, lord_num_iterations=5, seed=0):
+    def __init__(self, use_lord_regularization=True, lord_decay_rate=1e-3, lord_num_iterations=5, seed=0, output_dir="."):
         """
         Initialize AlphaGPT training engine.
         
@@ -22,6 +23,9 @@ class AlphaEngine:
             lord_num_iterations: Number of Newton-Schulz iterations per step
         """
         self.seed = seed
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.checkpoint_path = self.output_dir / ModelConfig.CHECKPOINT_PATH
         self._set_seed(seed)
         self.loader = CryptoDataLoader()
         self.loader.load_data()
@@ -91,10 +95,10 @@ class AlphaEngine:
             'best_formula': self.best_formula,
             'training_history': self.training_history,
             'seed': self.seed,
-        }, ModelConfig.CHECKPOINT_PATH)
+        }, self.checkpoint_path)
 
     def _load_checkpoint(self):
-        checkpoint = torch.load(ModelConfig.CHECKPOINT_PATH, map_location=ModelConfig.DEVICE, weights_only=False)
+        checkpoint = torch.load(self.checkpoint_path, map_location=ModelConfig.DEVICE, weights_only=False)
         self.model.load_state_dict(checkpoint['model'])
         self.opt.load_state_dict(checkpoint['optimizer'])
         self.best_score = checkpoint['best_score']
@@ -232,13 +236,15 @@ class AlphaEngine:
                 self._save_checkpoint(step + 1)
 
         # Save best formula
+        if self.best_formula is None:
+            raise RuntimeError("No valid formula was found; increase --steps or --batch-size")
         self._save_checkpoint(ModelConfig.TRAIN_STEPS)
-        with open("best_meme_strategy.json", "w") as f:
+        with open(self.output_dir / "best_meme_strategy.json", "w") as f:
             json.dump(self.best_formula, f)
         
         # Save training history
         import json as js
-        with open("training_history.json", "w") as f:
+        with open(self.output_dir / "training_history.json", "w") as f:
             js.dump(self.training_history, f)
 
         validation_result = self.vm.execute(self.best_formula, self.loader.validation_feat_tensor)
@@ -262,7 +268,7 @@ class AlphaEngine:
                 ).items()
             },
         }
-        with open("evaluation_report.json", "w") as f:
+        with open(self.output_dir / "evaluation_report.json", "w") as f:
             js.dump(evaluation_report, f, indent=2)
         
         print(f"\n✓ Training completed!")
@@ -292,11 +298,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Mine formula-based market signals.")
     parser.add_argument("--resume", action="store_true", help="Resume from training_checkpoint.pt")
     parser.add_argument("--steps", type=int, help="Override the configured total training steps")
+    parser.add_argument("--batch-size", type=int, help="Override the formula batch size")
     parser.add_argument("--seed", type=int, default=0, help="Random seed for reproducible runs")
+    parser.add_argument("--output-dir", default=".", help="Directory for formula, reports, and checkpoint")
     args = parser.parse_args()
     if args.steps is not None:
         if args.steps <= 0:
             parser.error("--steps must be positive")
         ModelConfig.TRAIN_STEPS = args.steps
-    eng = AlphaEngine(use_lord_regularization=True, seed=args.seed)
+    if args.batch_size is not None:
+        if args.batch_size <= 0:
+            parser.error("--batch-size must be positive")
+        ModelConfig.BATCH_SIZE = args.batch_size
+    eng = AlphaEngine(use_lord_regularization=True, seed=args.seed, output_dir=args.output_dir)
     eng.train(resume=args.resume)

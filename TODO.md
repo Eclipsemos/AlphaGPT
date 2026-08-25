@@ -21,6 +21,7 @@ This list is ordered by research reliability, not by visual polish.
 - [x] Align signal timestamps and forward returns explicitly, with tests covering off-by-one errors.
 - [x] Fix or remove the LoRD monitor/regularizer until its parameter targeting matches the actual model modules.
 - [x] Add a command that evaluates an existing formula without retraining.
+- [x] Add a one-command batch workflow for data refresh, multi-seed training, and evaluation.
 
 ## P2: Make the Tool Easier to Use
 

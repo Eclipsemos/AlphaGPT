@@ -11,9 +11,20 @@ from model_core.data_loader import (
 )
 from model_core.vm import StackVM
 from dashboard.data_service import DashboardService
+from batch_research import build_parser, parse_seeds
 
 
 class ResearchCoreTests(unittest.TestCase):
+    def test_batch_seed_parser_and_defaults(self):
+        self.assertEqual(parse_seeds("7, 11,13"), [7, 11, 13])
+        args = build_parser().parse_args([])
+        self.assertEqual(args.seeds, [1, 2, 3])
+        self.assertIsNone(args.output_dir)
+
+    def test_batch_seed_parser_rejects_duplicates(self):
+        with self.assertRaises(SystemExit):
+            build_parser().parse_args(["--seeds", "1,1"])
+
     def test_forward_return_alignment_and_purge(self):
         opens = torch.tensor([[10.0, 11.0, 22.0, 44.0, 88.0]])
         actual = compute_forward_returns(opens)
