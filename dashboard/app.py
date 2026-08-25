@@ -52,6 +52,7 @@ portfolio_df = svc.load_portfolio()
 market_df = svc.get_market_overview()
 strategy_data = svc.load_strategy_info()
 data_status = svc.get_data_status()
+pipeline_status = svc.load_pipeline_status()
 
 open_positions = len(portfolio_df)
 total_invested = portfolio_df['initial_cost_sol'].sum() if not portfolio_df.empty else 0.0
@@ -73,7 +74,9 @@ with col4:
 st.caption(
     f"Data: {data_status['token_count']} tokens / {data_status['candle_count']} candles | "
     f"Latest candle: {data_status['latest_candle'] or 'unknown'} | "
-    f"Snapshots: {data_status['snapshot_count']}"
+    f"Snapshots: {data_status['snapshot_count']} | "
+    f"Birdeye requests: {pipeline_status.get('birdeye_requests', 'unknown')} | "
+    f"Rate limits: {pipeline_status.get('birdeye_rate_limits', 'unknown')}"
 )
 
 tab1, tab2, tab3, tab4 = st.tabs(["Portfolio", "Market Scanner", "Logs", "Research"])

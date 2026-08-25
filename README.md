@@ -159,6 +159,8 @@ python -m strategy_manager.runner
 
 That module is intended to connect signals to Solana/Jupiter execution. The project currently has no complete paper-trading switch, so live execution must remain disabled.
 
+See [LIVE_EXECUTION.md](LIVE_EXECUTION.md) for the explicit execution gate and review requirements.
+
 ## License
 
 See [LICENSE](LICENSE).

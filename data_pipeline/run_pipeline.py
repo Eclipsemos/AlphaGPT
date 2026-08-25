@@ -15,6 +15,7 @@ async def main():
         await manager.pipeline_sync_daily()
     except Exception as e:
         logger.exception(f"Pipeline crashed: {e}")
+        manager._write_status(error=str(e))
     finally:
         await manager.close()
 

@@ -1,6 +1,7 @@
 import asyncio
 import aiohttp
 from datetime import datetime
+import json
 from loguru import logger
 from .config import Config
 from .db_manager import DBManager
@@ -19,6 +20,17 @@ class DataManager:
 
     async def close(self):
         await self.db.close()
+
+    def _write_status(self, **values):
+        status = {
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "birdeye_requests": self.birdeye.request_count,
+            "birdeye_rate_limits": self.birdeye.rate_limit_count,
+            "birdeye_last_status": self.birdeye.last_status,
+            **values,
+        }
+        with open("data_pipeline_status.json", "w") as handle:
+            json.dump(status, handle, indent=2)
 
     async def pipeline_sync_daily(self):
         logger.info("Step 1: Discovering trending tokens...")
@@ -42,6 +54,7 @@ class DataManager:
         logger.info(f"Tokens selected after filtering: {len(selected_tokens)}")
         
         if not selected_tokens:
+            self._write_status(candidate_count=len(candidates), selected_count=0, candle_count=0)
             logger.warning("No tokens passed the filter. Relax constraints in Config.")
             return
 
@@ -77,3 +90,4 @@ class DataManager:
                 logger.info(f"Processed batch {i}/{len(tasks)}. Inserted {len(records)} candles.")
                 
         logger.success(f"Pipeline complete. Total candles stored: {total_candles}")
+        self._write_status(candidate_count=len(candidates), selected_count=len(selected_tokens), candle_count=total_candles)

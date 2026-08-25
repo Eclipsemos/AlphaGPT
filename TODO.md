@@ -37,7 +37,7 @@ This list is ordered by research reliability, not by visual polish.
 - [x] Build a paper-trading simulator with persisted virtual balances.
 - [x] Add signal logging without transaction signing.
 - [x] Add explicit kill switch and dry-run-only defaults.
-- [ ] Document live execution separately, after paper-trading results are reproducible.
+- [x] Document live execution separately, while keeping it disabled until paper-trading results are reproducible.
 
 ## Out of Scope Until P0/P1 Are Complete
 

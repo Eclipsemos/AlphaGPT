@@ -13,6 +13,9 @@ class BirdeyeProvider(DataProvider):
             "accept": "application/json"
         }
         self.semaphore = asyncio.Semaphore(Config.CONCURRENCY)
+        self.request_count = 0
+        self.rate_limit_count = 0
+        self.last_status = None
 
     @staticmethod
     def _as_float(value, default=0.0):
@@ -34,7 +37,9 @@ class BirdeyeProvider(DataProvider):
         
         async with aiohttp.ClientSession(headers=self.headers, trust_env=True) as session:
             try:
+                self.request_count += 1
                 async with session.get(url, params=params) as resp:
+                    self.last_status = resp.status
                     if resp.status == 200:
                         data = await resp.json()
                         raw_list = data.get('data', {}).get('tokens', [])
@@ -57,7 +62,7 @@ class BirdeyeProvider(DataProvider):
                 logger.error(f"Birdeye Trending Exception: {e}")
                 return []
 
-    async def get_token_history(self, session, address, days=Config.HISTORY_DAYS, liquidity=None, fdv=None):
+    async def get_token_history(self, session, address, days=Config.HISTORY_DAYS, liquidity=None, fdv=None, retries=0):
         time_to = int(datetime.now().timestamp())
         time_from = int((datetime.now() - timedelta(days=days)).timestamp())
         snapshot_liquidity = self._as_float(liquidity)
@@ -73,7 +78,9 @@ class BirdeyeProvider(DataProvider):
 
         async with self.semaphore:
             try:
+                self.request_count += 1
                 async with session.get(url, params=params) as resp:
+                    self.last_status = resp.status
                     if resp.status == 200:
                         data = await resp.json()
                         items = data.get('data', {}).get('items', [])
@@ -97,9 +104,20 @@ class BirdeyeProvider(DataProvider):
                             ))
                         return formatted
                     elif resp.status == 429:
-                        logger.warning(f"Birdeye 429 for {address}, retrying...")
-                        await asyncio.sleep(2)
-                        return await self.get_token_history(session, address, days, liquidity=liquidity, fdv=fdv)
+                        self.rate_limit_count += 1
+                        if retries >= 3:
+                            logger.error(f"Birdeye 429 for {address}, retry limit reached.")
+                            return []
+                        logger.warning(f"Birdeye 429 for {address}, retry {retries + 1}/3...")
+                        await asyncio.sleep(2 * (retries + 1))
+                        return await self.get_token_history(
+                            session,
+                            address,
+                            days,
+                            liquidity=liquidity,
+                            fdv=fdv,
+                            retries=retries + 1,
+                        )
                     else:
                         return []
             except Exception as e:

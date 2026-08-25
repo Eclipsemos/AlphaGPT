@@ -10,6 +10,7 @@ from model_core.data_loader import (
     inspect_market_data,
 )
 from model_core.vm import StackVM
+from dashboard.data_service import DashboardService
 
 
 class ResearchCoreTests(unittest.TestCase):
@@ -59,6 +60,16 @@ class ResearchCoreTests(unittest.TestCase):
         self.assertIn("sharpe", report.as_dict())
         self.assertGreaterEqual(report.trade_count, 1)
         self.assertTrue(torch.isfinite(torch.tensor(list(report.as_dict().values()))).all())
+
+    def test_dashboard_market_query_uses_latest_row_per_address(self):
+        query = DashboardService.market_overview_query(25)
+        self.assertIn("latest.address = o.address", query)
+        self.assertIn("MAX(latest.time)", query)
+        self.assertIn("LIMIT 25", query)
+
+    def test_dashboard_market_query_clamps_limit(self):
+        self.assertIn("LIMIT 1", DashboardService.market_overview_query(0))
+        self.assertIn("LIMIT 500", DashboardService.market_overview_query(9999))
 
 
 if __name__ == "__main__":

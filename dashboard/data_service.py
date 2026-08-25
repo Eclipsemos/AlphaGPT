@@ -106,6 +106,25 @@ class DashboardService:
     def load_evaluation_report(self):
         return self._load_json_file("evaluation_report.json", {})
 
+    def load_pipeline_status(self):
+        return self._load_json_file("data_pipeline_status.json", {})
+
+    @staticmethod
+    def market_overview_query(limit=50):
+        limit = max(1, min(int(limit), 500))
+        return f"""
+        SELECT t.symbol, o.address, o.close, o.volume, o.liquidity, o.fdv, o.time
+        FROM ohlcv o
+        JOIN tokens t ON o.address = t.address
+        WHERE o.time = (
+            SELECT MAX(latest.time)
+            FROM ohlcv AS latest
+            WHERE latest.address = o.address
+        )
+        ORDER BY o.liquidity DESC
+        LIMIT {limit}
+        """
+
     def get_data_status(self):
         query = """
         SELECT
@@ -123,18 +142,7 @@ class DashboardService:
             return {"token_count": 0, "candle_count": 0, "latest_candle": None, "snapshot_count": 0, "latest_snapshot": None}
 
     def get_market_overview(self, limit=50):
-        query = f"""
-        SELECT t.symbol, o.address, o.close, o.volume, o.liquidity, o.fdv, o.time
-        FROM ohlcv o
-        JOIN tokens t ON o.address = t.address
-        WHERE o.time = (
-            SELECT MAX(latest.time)
-            FROM ohlcv AS latest
-            WHERE latest.address = o.address
-        )
-        ORDER BY o.liquidity DESC
-        LIMIT {limit}
-        """
+        query = self.market_overview_query(limit)
         try:
             return pd.read_sql(query, self.engine)
         except Exception:
