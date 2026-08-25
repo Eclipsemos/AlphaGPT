@@ -18,3 +18,5 @@ class ModelConfig:
     TRAIN_RATIO = 0.60
     VALIDATION_RATIO = 0.20
     TEST_RATIO = 0.20
+    CHECKPOINT_INTERVAL = 100
+    CHECKPOINT_PATH = "training_checkpoint.pt"

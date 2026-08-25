@@ -2,6 +2,8 @@ import torch
 from torch.distributions import Categorical
 from tqdm import tqdm
 import json
+import random
+import numpy as np
 
 from .config import ModelConfig
 from .data_loader import CryptoDataLoader
@@ -10,7 +12,7 @@ from .vm import StackVM
 from .backtest import MemeBacktest
 
 class AlphaEngine:
-    def __init__(self, use_lord_regularization=True, lord_decay_rate=1e-3, lord_num_iterations=5):
+    def __init__(self, use_lord_regularization=True, lord_decay_rate=1e-3, lord_num_iterations=5, seed=0):
         """
         Initialize AlphaGPT training engine.
         
@@ -19,6 +21,8 @@ class AlphaEngine:
             lord_decay_rate: Strength of LoRD regularization
             lord_num_iterations: Number of Newton-Schulz iterations per step
         """
+        self.seed = seed
+        self._set_seed(seed)
         self.loader = CryptoDataLoader()
         self.loader.load_data()
         
@@ -58,7 +62,47 @@ class AlphaEngine:
             'validation_return': [],
             'test_score': [],
             'test_return': [],
+            'config': {
+                'seed': seed,
+                'train_steps': ModelConfig.TRAIN_STEPS,
+                'batch_size': ModelConfig.BATCH_SIZE,
+                'train_ratio': ModelConfig.TRAIN_RATIO,
+                'validation_ratio': ModelConfig.VALIDATION_RATIO,
+                'test_ratio': ModelConfig.TEST_RATIO,
+                'device': str(ModelConfig.DEVICE),
+            },
         }
+        self.start_step = 0
+
+    @staticmethod
+    def _set_seed(seed):
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+
+    def _save_checkpoint(self, next_step):
+        torch.save({
+            'next_step': next_step,
+            'model': self.model.state_dict(),
+            'optimizer': self.opt.state_dict(),
+            'best_score': self.best_score,
+            'best_formula': self.best_formula,
+            'training_history': self.training_history,
+            'seed': self.seed,
+        }, ModelConfig.CHECKPOINT_PATH)
+
+    def _load_checkpoint(self):
+        checkpoint = torch.load(ModelConfig.CHECKPOINT_PATH, map_location=ModelConfig.DEVICE, weights_only=False)
+        self.model.load_state_dict(checkpoint['model'])
+        self.opt.load_state_dict(checkpoint['optimizer'])
+        self.best_score = checkpoint['best_score']
+        self.best_formula = checkpoint['best_formula']
+        self.training_history = checkpoint['training_history']
+        self.start_step = int(checkpoint['next_step'])
+        self._set_seed(int(checkpoint.get('seed', self.seed)))
+        print(f"Resuming from checkpoint at step {self.start_step}.")
 
     def evaluate_formula(self, formula, feat_tensor, raw_data, target_ret):
         if formula is None:
@@ -69,13 +113,15 @@ class AlphaEngine:
         report = self.bt.evaluate_report(result, raw_data, target_ret)
         return report.score, report.cumulative_return
 
-    def train(self):
+    def train(self, resume=False):
+        if resume:
+            self._load_checkpoint()
         print("🚀 Starting Meme Alpha Mining with LoRD Regularization..." if self.use_lord else "🚀 Starting Meme Alpha Mining...")
         if self.use_lord:
             print(f"   LoRD Regularization enabled")
             print(f"   Target keywords: ['q_proj', 'k_proj', 'attention', 'qk_norm']")
         
-        pbar = tqdm(range(ModelConfig.TRAIN_STEPS))
+        pbar = tqdm(range(self.start_step, ModelConfig.TRAIN_STEPS))
         
         for step in pbar:
             bs = ModelConfig.BATCH_SIZE
@@ -178,8 +224,11 @@ class AlphaEngine:
             self.training_history['test_return'].append(test_return)
             
             pbar.set_postfix(postfix_dict)
+            if (step + 1) % ModelConfig.CHECKPOINT_INTERVAL == 0:
+                self._save_checkpoint(step + 1)
 
         # Save best formula
+        self._save_checkpoint(ModelConfig.TRAIN_STEPS)
         with open("best_meme_strategy.json", "w") as f:
             json.dump(self.best_formula, f)
         
@@ -234,5 +283,16 @@ class AlphaEngine:
 
 
 if __name__ == "__main__":
-    eng = AlphaEngine(use_lord_regularization=True)
-    eng.train()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Mine formula-based market signals.")
+    parser.add_argument("--resume", action="store_true", help="Resume from training_checkpoint.pt")
+    parser.add_argument("--steps", type=int, help="Override the configured total training steps")
+    parser.add_argument("--seed", type=int, default=0, help="Random seed for reproducible runs")
+    args = parser.parse_args()
+    if args.steps is not None:
+        if args.steps <= 0:
+            parser.error("--steps must be positive")
+        ModelConfig.TRAIN_STEPS = args.steps
+    eng = AlphaEngine(use_lord_regularization=True, seed=args.seed)
+    eng.train(resume=args.resume)

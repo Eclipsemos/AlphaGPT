@@ -14,13 +14,13 @@ This list is ordered by research reliability, not by visual polish.
 
 ## P1: Improve the Research Loop
 
-- [ ] Save model checkpoints and resume interrupted training.
-- [ ] Add deterministic seeds and record the full configuration with each run.
+- [x] Save model checkpoints and resume interrupted training.
+- [x] Add deterministic seeds and record the full configuration with each run.
 - [ ] Constrain formula generation to valid expression trees instead of penalizing arbitrary invalid token sequences.
 - [ ] Run multiple seeds and report confidence intervals rather than a single best formula.
 - [ ] Align signal timestamps and forward returns explicitly, with tests covering off-by-one errors.
 - [ ] Fix or remove the LoRD monitor/regularizer until its parameter targeting matches the actual model modules.
-- [ ] Add a command that evaluates an existing formula without retraining.
+- [x] Add a command that evaluates an existing formula without retraining.
 
 ## P2: Make the Tool Easier to Use
 

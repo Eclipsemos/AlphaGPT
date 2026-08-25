@@ -78,11 +78,24 @@ Run formula mining:
 python -m model_core.engine
 ```
 
+Use `--seed` for reproducible sampling, `--steps` for a shorter experiment, and `--resume` to continue from `training_checkpoint.pt`:
+
+```bash
+python -m model_core.engine --seed 7 --steps 1000
+python -m model_core.engine --resume --seed 7 --steps 1000
+```
+
 The command writes local experiment artifacts:
 
 - `best_meme_strategy.json`: the best formula found in that run;
 - `training_history.json`: reward history for the run.
 - `evaluation_report.json`: validation/test metrics and test-set baseline comparisons.
+
+Evaluate an existing formula without retraining:
+
+```bash
+python -m model_core.evaluate --formula best_meme_strategy.json
+```
 
 Inspect the dashboard:
 
