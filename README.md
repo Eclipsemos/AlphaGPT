@@ -110,6 +110,19 @@ Run a simple walk-forward evaluation over unseen temporal windows:
 python -m model_core.walk_forward --formula best_meme_strategy.json --windows 4
 ```
 
+Summarize independent formula runs on the unseen test split:
+
+```bash
+python -m model_core.multi_seed --formulas run1.json,run2.json,run3.json
+```
+
+Run the historical paper simulator. It persists only virtual balances and
+trade logs; it never imports a wallet key or signs a transaction:
+
+```bash
+python -m strategy_manager.paper --formula best_meme_strategy.json
+```
+
 Run the research-core tests:
 
 ```bash

@@ -16,8 +16,8 @@ This list is ordered by research reliability, not by visual polish.
 
 - [x] Save model checkpoints and resume interrupted training.
 - [x] Add deterministic seeds and record the full configuration with each run.
-- [ ] Constrain formula generation to valid expression trees instead of penalizing arbitrary invalid token sequences.
-- [ ] Run multiple seeds and report confidence intervals rather than a single best formula.
+- [x] Constrain formula generation to valid expression trees instead of penalizing arbitrary invalid token sequences.
+- [x] Run multiple saved runs and report mean/std confidence summaries on the test split.
 - [x] Align signal timestamps and forward returns explicitly, with tests covering off-by-one errors.
 - [x] Fix or remove the LoRD monitor/regularizer until its parameter targeting matches the actual model modules.
 - [x] Add a command that evaluates an existing formula without retraining.
@@ -34,9 +34,9 @@ This list is ordered by research reliability, not by visual polish.
 
 ## P3: Paper Trading Only
 
-- [ ] Build a paper-trading simulator with persisted virtual balances.
-- [ ] Add signal logging without transaction signing.
-- [ ] Add explicit kill switches and dry-run defaults.
+- [x] Build a paper-trading simulator with persisted virtual balances.
+- [x] Add signal logging without transaction signing.
+- [x] Add explicit kill switch and dry-run-only defaults.
 - [ ] Document live execution separately, after paper-trading results are reproducible.
 
 ## Out of Scope Until P0/P1 Are Complete
