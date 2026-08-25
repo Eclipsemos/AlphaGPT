@@ -82,6 +82,7 @@ The command writes local experiment artifacts:
 
 - `best_meme_strategy.json`: the best formula found in that run;
 - `training_history.json`: reward history for the run.
+- `evaluation_report.json`: validation/test metrics and test-set baseline comparisons.
 
 Inspect the dashboard:
 

@@ -66,8 +66,8 @@ class AlphaEngine:
         result = self.vm.execute(formula, feat_tensor)
         if result is None:
             return float('-inf'), 0.0
-        score, ret_val = self.bt.evaluate(result, raw_data, target_ret)
-        return score.item(), ret_val
+        report = self.bt.evaluate_report(result, raw_data, target_ret)
+        return report.score, report.cumulative_return
 
     def train(self):
         print("🚀 Starting Meme Alpha Mining with LoRD Regularization..." if self.use_lord else "🚀 Starting Meme Alpha Mining...")
@@ -187,6 +187,30 @@ class AlphaEngine:
         import json as js
         with open("training_history.json", "w") as f:
             js.dump(self.training_history, f)
+
+        validation_result = self.vm.execute(self.best_formula, self.loader.validation_feat_tensor)
+        test_result = self.vm.execute(self.best_formula, self.loader.test_feat_tensor)
+        evaluation_report = {
+            "validation": self.bt.evaluate_report(
+                validation_result,
+                self.loader.validation_raw_data_cache,
+                self.loader.validation_target_ret,
+            ).as_dict(),
+            "test": self.bt.evaluate_report(
+                test_result,
+                self.loader.test_raw_data_cache,
+                self.loader.test_target_ret,
+            ).as_dict(),
+            "test_baselines": {
+                name: report.as_dict()
+                for name, report in self.bt.baseline_reports(
+                    self.loader.test_raw_data_cache,
+                    self.loader.test_target_ret,
+                ).items()
+            },
+        }
+        with open("evaluation_report.json", "w") as f:
+            js.dump(evaluation_report, f, indent=2)
         
         print(f"\n✓ Training completed!")
         print(f"  Best score: {self.best_score:.4f}")
@@ -205,6 +229,8 @@ class AlphaEngine:
         )
         print(f"  Validation score/return: {validation_score:.4f} / {validation_return:.2%}")
         print(f"  Test score/return: {test_score:.4f} / {test_return:.2%}")
+        for name, report in evaluation_report["test_baselines"].items():
+            print(f"  Test baseline {name}: score={report['score']:.4f}, return={report['cumulative_return']:.2%}, drawdown={report['max_drawdown']:.2%}")
 
 
 if __name__ == "__main__":

@@ -9,8 +9,8 @@ This list is ordered by research reliability, not by visual polish.
 - [x] Prevent future data from entering feature normalization and split labels.
 - [ ] Replace the current-trending-token universe with a reproducible historical universe.
 - [x] Add data-quality checks for missing candles, zero prices, duplicate rows, and stale liquidity/FDV values.
-- [ ] Produce a backtest report with cumulative return, volatility, Sharpe, maximum drawdown, turnover, trade count, win rate, and fees.
-- [ ] Add baseline comparisons: buy-and-hold, liquidity filter, momentum, and random formula.
+- [x] Produce a backtest report with cumulative return, volatility, Sharpe, maximum drawdown, turnover, trade count, win rate, and fees.
+- [x] Add baseline comparisons: buy-and-hold, liquidity filter, momentum, and random formula.
 
 ## P1: Improve the Research Loop
 
