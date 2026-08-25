@@ -92,6 +92,36 @@ class DashboardService:
         except (FileNotFoundError, json.JSONDecodeError):
             return {"formula": "Not Trained Yet"}
 
+    @staticmethod
+    def _load_json_file(path, default):
+        try:
+            with open(path) as handle:
+                return json.load(handle)
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return default
+
+    def load_training_history(self):
+        return self._load_json_file("training_history.json", {})
+
+    def load_evaluation_report(self):
+        return self._load_json_file("evaluation_report.json", {})
+
+    def get_data_status(self):
+        query = """
+        SELECT
+            (SELECT COUNT(*) FROM tokens) AS token_count,
+            (SELECT COUNT(*) FROM ohlcv) AS candle_count,
+            (SELECT MAX(time) FROM ohlcv) AS latest_candle,
+            (SELECT COUNT(*) FROM token_snapshots) AS snapshot_count,
+            (SELECT MAX(snapshot_time) FROM token_snapshots) AS latest_snapshot
+        """
+        try:
+            with self.engine.connect() as connection:
+                row = connection.exec_driver_sql(query).mappings().one()
+            return dict(row)
+        except Exception:
+            return {"token_count": 0, "candle_count": 0, "latest_candle": None, "snapshot_count": 0, "latest_snapshot": None}
+
     def get_market_overview(self, limit=50):
         query = f"""
         SELECT t.symbol, o.address, o.close, o.volume, o.liquidity, o.fdv, o.time

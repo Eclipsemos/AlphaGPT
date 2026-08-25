@@ -17,15 +17,10 @@ def load_formula(path):
     return [int(token) for token in formula]
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Evaluate a saved AlphaGPT formula.")
-    parser.add_argument("--formula", default="best_meme_strategy.json")
-    parser.add_argument("--output", default="evaluation_report.json")
-    args = parser.parse_args()
-
+def run(formula_path="best_meme_strategy.json", output_path="evaluation_report.json"):
     loader = CryptoDataLoader()
     loader.load_data()
-    formula = load_formula(args.formula)
+    formula = load_formula(formula_path)
     vm = StackVM()
     backtest = MemeBacktest()
 
@@ -49,9 +44,17 @@ def main():
     }
     reports["formula"] = formula
     reports["data_quality"] = loader.quality_report.as_dict()
-    with open(args.output, "w") as handle:
+    with open(output_path, "w") as handle:
         json.dump(reports, handle, indent=2)
     print(json.dumps(reports, indent=2))
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Evaluate a saved AlphaGPT formula.")
+    parser.add_argument("--formula", default="best_meme_strategy.json")
+    parser.add_argument("--output", default="evaluation_report.json")
+    args = parser.parse_args()
+    run(args.formula, args.output)
 
 
 if __name__ == "__main__":

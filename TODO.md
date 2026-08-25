@@ -24,10 +24,11 @@ This list is ordered by research reliability, not by visual polish.
 
 ## P2: Make the Tool Easier to Use
 
-- [ ] Add `.env.example` with safe placeholder values.
-- [ ] Add a single research command that initializes the database, refreshes data, and runs validation checks.
-- [ ] Add dashboard views for training history and backtest metrics.
-- [ ] Show data freshness, row counts, and API-rate-limit status in the dashboard.
+- [x] Add `.env.example` with safe placeholder values.
+- [x] Add a single research command that initializes the database, refreshes data, and runs validation checks.
+- [x] Add dashboard views for training history and backtest metrics.
+- [x] Show data freshness and row counts in the dashboard.
+- [ ] Show API-rate-limit status in the dashboard.
 - [x] Add automated tests for the data loader, VM operators, and backtest accounting.
 - [ ] Add automated tests for database queries.
 

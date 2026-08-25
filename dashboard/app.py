@@ -51,6 +51,7 @@ col1, col2, col3, col4 = st.columns(4)
 portfolio_df = svc.load_portfolio()
 market_df = svc.get_market_overview()
 strategy_data = svc.load_strategy_info()
+data_status = svc.get_data_status()
 
 open_positions = len(portfolio_df)
 total_invested = portfolio_df['initial_cost_sol'].sum() if not portfolio_df.empty else 0.0
@@ -69,7 +70,13 @@ with col3:
 with col4:
     st.metric("Active Strategy", "AlphaGPT-v1", help=str(strategy_data))
 
-tab1, tab2, tab3 = st.tabs(["Portfolio", "Market Scanner", "Logs"])
+st.caption(
+    f"Data: {data_status['token_count']} tokens / {data_status['candle_count']} candles | "
+    f"Latest candle: {data_status['latest_candle'] or 'unknown'} | "
+    f"Snapshots: {data_status['snapshot_count']}"
+)
+
+tab1, tab2, tab3, tab4 = st.tabs(["Portfolio", "Market Scanner", "Logs", "Research"])
 
 with tab1:
     st.subheader("Active Holdings")
@@ -104,6 +111,27 @@ with tab3:
         st.code("".join(logs), language="text")
     else:
         st.caption("No logs found or log file path incorrect.")
+
+with tab4:
+    st.subheader("Research Status")
+    history = svc.load_training_history()
+    report = svc.load_evaluation_report()
+    if history.get("step"):
+        st.metric("Training Steps", len(history["step"]))
+        history_df = pd.DataFrame({
+            "step": history.get("step", []),
+            "avg_reward": history.get("avg_reward", []),
+            "best_score": history.get("best_score", []),
+            "validation_score": history.get("validation_score", []),
+            "test_score": history.get("test_score", []),
+        }).set_index("step")
+        st.line_chart(history_df)
+    else:
+        st.info("No training history found. Run python -m model_core.engine first.")
+    if report:
+        st.json(report)
+    else:
+        st.info("No evaluation report found. Run python -m model_core.evaluate.")
 
 time.sleep(1) 
 if st.checkbox("Auto-Refresh (30s)", value=True):

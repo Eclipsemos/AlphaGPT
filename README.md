@@ -72,6 +72,13 @@ Collect or refresh market data:
 python -m data_pipeline.run_pipeline
 ```
 
+Run non-trading research checks in one command:
+
+```bash
+python -m research
+python -m research --refresh --evaluate --walk-forward
+```
+
 Run formula mining:
 
 ```bash
