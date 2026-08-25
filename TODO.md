@@ -28,9 +28,9 @@ This list is ordered by research reliability, not by visual polish.
 - [x] Add a single research command that initializes the database, refreshes data, and runs validation checks.
 - [x] Add dashboard views for training history and backtest metrics.
 - [x] Show data freshness and row counts in the dashboard.
-- [ ] Show API-rate-limit status in the dashboard.
+- [x] Show API-rate-limit status in the dashboard.
 - [x] Add automated tests for the data loader, VM operators, and backtest accounting.
-- [ ] Add automated tests for database queries.
+- [x] Add automated tests for database queries.
 
 ## P3: Paper Trading Only
 
