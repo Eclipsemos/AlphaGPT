@@ -53,8 +53,21 @@ class AlphaEngine:
             'step': [],
             'avg_reward': [],
             'best_score': [],
-            'stable_rank': []
+            'stable_rank': [],
+            'validation_score': [],
+            'validation_return': [],
+            'test_score': [],
+            'test_return': [],
         }
+
+    def evaluate_formula(self, formula, feat_tensor, raw_data, target_ret):
+        if formula is None:
+            return float('-inf'), 0.0
+        result = self.vm.execute(formula, feat_tensor)
+        if result is None:
+            return float('-inf'), 0.0
+        score, ret_val = self.bt.evaluate(result, raw_data, target_ret)
+        return score.item(), ret_val
 
     def train(self):
         print("🚀 Starting Meme Alpha Mining with LoRD Regularization..." if self.use_lord else "🚀 Starting Meme Alpha Mining...")
@@ -89,7 +102,7 @@ class AlphaEngine:
             for i in range(bs):
                 formula = seqs[i].tolist()
                 
-                res = self.vm.execute(formula, self.loader.feat_tensor)
+                res = self.vm.execute(formula, self.loader.train_feat_tensor)
                 
                 if res is None:
                     rewards[i] = -5.0
@@ -99,7 +112,11 @@ class AlphaEngine:
                     rewards[i] = -2.0
                     continue
                 
-                score, ret_val = self.bt.evaluate(res, self.loader.raw_data_cache, self.loader.target_ret)
+                score, ret_val = self.bt.evaluate(
+                    res,
+                    self.loader.train_raw_data_cache,
+                    self.loader.train_target_ret,
+                )
                 rewards[i] = score if torch.isfinite(score) else -10.0
                 
                 if score.item() > self.best_score:
@@ -142,6 +159,23 @@ class AlphaEngine:
             self.training_history['step'].append(step)
             self.training_history['avg_reward'].append(avg_reward)
             self.training_history['best_score'].append(self.best_score)
+
+            validation_score, validation_return = self.evaluate_formula(
+                self.best_formula,
+                self.loader.validation_feat_tensor,
+                self.loader.validation_raw_data_cache,
+                self.loader.validation_target_ret,
+            )
+            test_score, test_return = self.evaluate_formula(
+                self.best_formula,
+                self.loader.test_feat_tensor,
+                self.loader.test_raw_data_cache,
+                self.loader.test_target_ret,
+            )
+            self.training_history['validation_score'].append(validation_score)
+            self.training_history['validation_return'].append(validation_return)
+            self.training_history['test_score'].append(test_score)
+            self.training_history['test_return'].append(test_return)
             
             pbar.set_postfix(postfix_dict)
 
@@ -157,6 +191,20 @@ class AlphaEngine:
         print(f"\n✓ Training completed!")
         print(f"  Best score: {self.best_score:.4f}")
         print(f"  Best formula: {self.best_formula}")
+        validation_score, validation_return = self.evaluate_formula(
+            self.best_formula,
+            self.loader.validation_feat_tensor,
+            self.loader.validation_raw_data_cache,
+            self.loader.validation_target_ret,
+        )
+        test_score, test_return = self.evaluate_formula(
+            self.best_formula,
+            self.loader.test_feat_tensor,
+            self.loader.test_raw_data_cache,
+            self.loader.test_target_ret,
+        )
+        print(f"  Validation score/return: {validation_score:.4f} / {validation_return:.2%}")
+        print(f"  Test score/return: {test_score:.4f} / {test_return:.2%}")
 
 
 if __name__ == "__main__":

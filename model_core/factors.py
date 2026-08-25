@@ -159,7 +159,7 @@ class FeatureEngineer:
     INPUT_DIM = len(FEATURE_NAMES)
 
     @staticmethod
-    def compute_features(raw_dict):
+    def compute_features(raw_dict, fit_end=None):
         c = raw_dict['close']
         o = raw_dict['open']
         h = raw_dict['high']
@@ -176,8 +176,9 @@ class FeatureEngineer:
         log_vol = torch.log1p(v)
         
         def robust_norm(t):
-            median = torch.nanmedian(t, dim=1, keepdim=True)[0]
-            mad = torch.nanmedian(torch.abs(t - median), dim=1, keepdim=True)[0] + 1e-6
+            fit = t if fit_end is None else t[:, :fit_end]
+            median = torch.nanmedian(fit, dim=1, keepdim=True)[0]
+            mad = torch.nanmedian(torch.abs(fit - median), dim=1, keepdim=True)[0] + 1e-6
             norm = (t - median) / mad
             return torch.clamp(norm, -5.0, 5.0)
 
