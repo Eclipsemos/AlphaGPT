@@ -2,6 +2,82 @@ import asyncpg
 from loguru import logger
 from .config import Config
 
+
+def binance_schema_statements() -> tuple[str, ...]:
+    """Return the additive Binance research schema used by ``init_schema``."""
+    return (
+        """
+        CREATE TABLE IF NOT EXISTS market_instruments (
+            venue TEXT NOT NULL,
+            market_type TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            status TEXT NOT NULL,
+            base_asset TEXT NOT NULL,
+            quote_asset TEXT NOT NULL,
+            onboard_time TIMESTAMPTZ,
+            quantity_step NUMERIC NOT NULL,
+            minimum_quantity NUMERIC NOT NULL,
+            minimum_notional NUMERIC NOT NULL,
+            tick_size NUMERIC NOT NULL,
+            quote_volume NUMERIC NOT NULL,
+            raw_filters JSONB NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (venue, market_type, symbol)
+        );
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS market_bars (
+            venue TEXT NOT NULL,
+            market_type TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            interval TEXT NOT NULL,
+            open_time TIMESTAMPTZ NOT NULL,
+            close_time TIMESTAMPTZ NOT NULL,
+            open NUMERIC NOT NULL,
+            high NUMERIC NOT NULL,
+            low NUMERIC NOT NULL,
+            close NUMERIC NOT NULL,
+            base_volume NUMERIC NOT NULL,
+            quote_volume NUMERIC NOT NULL,
+            trade_count BIGINT NOT NULL,
+            taker_buy_base_volume NUMERIC NOT NULL,
+            taker_buy_quote_volume NUMERIC NOT NULL,
+            source TEXT NOT NULL,
+            retrieved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (venue, market_type, symbol, interval, open_time),
+            FOREIGN KEY (venue, market_type, symbol)
+                REFERENCES market_instruments (venue, market_type, symbol)
+        );
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS dataset_snapshots (
+            snapshot_id TEXT PRIMARY KEY,
+            schema_version TEXT NOT NULL,
+            feature_schema_version TEXT NOT NULL,
+            venue TEXT NOT NULL,
+            market_type TEXT NOT NULL,
+            interval TEXT NOT NULL,
+            start_time TIMESTAMPTZ NOT NULL,
+            end_time TIMESTAMPTZ NOT NULL,
+            source TEXT NOT NULL,
+            code_version TEXT NOT NULL,
+            rules JSONB NOT NULL,
+            payload JSONB NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS dataset_snapshot_instruments (
+            snapshot_id TEXT NOT NULL REFERENCES dataset_snapshots(snapshot_id),
+            symbol TEXT NOT NULL,
+            rank INTEGER NOT NULL,
+            PRIMARY KEY (snapshot_id, symbol),
+            UNIQUE (snapshot_id, rank)
+        );
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_market_bars_lookup ON market_bars (symbol, interval, open_time);",
+    )
+
 class DBManager:
     def __init__(self):
         self.pool = None
@@ -66,6 +142,9 @@ class DBManager:
                 );
             """)
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_token_snapshots_address ON token_snapshots (address);")
+
+            for statement in binance_schema_statements():
+                await conn.execute(statement)
 
     async def upsert_tokens(self, tokens):
         if not tokens: return

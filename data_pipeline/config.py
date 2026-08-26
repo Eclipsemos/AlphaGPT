@@ -1,5 +1,8 @@
 import os
+from decimal import Decimal
 from dotenv import load_dotenv
+
+from .binance_contracts import BinanceUniverseRules
 
 load_dotenv()
 
@@ -22,3 +25,10 @@ class Config:
     USE_DEXSCREENER = False
     CONCURRENCY = 20
     HISTORY_DAYS = 30
+    BINANCE_BASE_URL = os.getenv("BINANCE_BASE_URL", "https://api.binance.com")
+    BINANCE_RULES = BinanceUniverseRules(
+        history_days=int(os.getenv("BINANCE_HISTORY_DAYS", "365")),
+        max_symbols=int(os.getenv("BINANCE_MAX_SYMBOLS", "50")),
+        minimum_listing_days=int(os.getenv("BINANCE_MIN_LISTING_DAYS", "30")),
+        minimum_quote_volume=Decimal(os.getenv("BINANCE_MIN_QUOTE_VOLUME", "10000000")),
+    )

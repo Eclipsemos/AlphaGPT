@@ -1,4 +1,6 @@
 import unittest
+from datetime import UTC, datetime
+from decimal import Decimal
 
 import torch
 import pandas as pd
@@ -12,9 +14,49 @@ from model_core.data_loader import (
 from model_core.vm import StackVM
 from dashboard.data_service import DashboardService
 from batch_research import build_parser, parse_seeds
+from data_pipeline.binance_contracts import (
+    BinanceUniverseRules,
+    dataset_snapshot_id,
+    dataset_snapshot_payload,
+)
+from data_pipeline.db_manager import binance_schema_statements
 
 
 class ResearchCoreTests(unittest.TestCase):
+    def test_binance_dataset_contract_is_deterministic(self):
+        rules = BinanceUniverseRules()
+        first = dataset_snapshot_payload(
+            rules,
+            ["ETHUSDT", "BTCUSDT", "ETHUSDT"],
+            datetime(2025, 1, 1, tzinfo=UTC),
+            datetime(2026, 1, 1, tzinfo=UTC),
+            source="binance-rest",
+            code_version="abc123",
+        )
+        second = dataset_snapshot_payload(
+            rules,
+            ["BTCUSDT", "ETHUSDT"],
+            datetime(2025, 1, 1, tzinfo=UTC),
+            datetime(2026, 1, 1, tzinfo=UTC),
+            source="binance-rest",
+            code_version="abc123",
+        )
+        self.assertEqual(first, second)
+        self.assertEqual(dataset_snapshot_id(first), dataset_snapshot_id(second))
+
+    def test_binance_contract_rejects_non_spot_scope(self):
+        with self.assertRaises(ValueError):
+            BinanceUniverseRules(market_type="futures")
+        with self.assertRaises(ValueError):
+            BinanceUniverseRules(minimum_quote_volume=Decimal("0"))
+
+    def test_binance_schema_does_not_overload_solana_address(self):
+        schema = "\n".join(binance_schema_statements())
+        self.assertIn("market_instruments", schema)
+        self.assertIn("market_bars", schema)
+        self.assertIn("dataset_snapshots", schema)
+        self.assertNotIn("address", schema)
+
     def test_batch_seed_parser_and_defaults(self):
         self.assertEqual(parse_seeds("7, 11,13"), [7, 11, 13])
         args = build_parser().parse_args([])
