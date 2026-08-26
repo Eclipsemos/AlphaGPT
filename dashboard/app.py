@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Streamlit puts the script directory, rather than the repository root, first
+# on sys.path. Resolve imports from the repository regardless of launch cwd.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import pandas as pd
 import streamlit as st
 
-from data_service import DashboardService
-from visualizer import plot_coverage, plot_market_scatter
+from dashboard.data_service import DashboardService
+from dashboard.visualizer import plot_coverage, plot_market_scatter
 from model_core.binance_features import (
     BINANCE_FEATURE_CODE_VERSION,
     BINANCE_FEATURE_DEFINITIONS,

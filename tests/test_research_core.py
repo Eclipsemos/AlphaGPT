@@ -2,6 +2,8 @@ import unittest
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+import subprocess
+import sys
 
 import torch
 import pandas as pd
@@ -24,6 +26,17 @@ from data_pipeline.db_manager import binance_schema_statements
 
 
 class ResearchCoreTests(unittest.TestCase):
+    def test_dashboard_imports_are_independent_of_launch_directory(self):
+        root = Path(__file__).resolve().parents[1]
+        result = subprocess.run(
+            [sys.executable, "-c", "import app"],
+            cwd=root / "dashboard",
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_repository_has_no_simulated_or_live_trading_modules(self):
         root = Path(__file__).resolve().parents[1]
         self.assertFalse((root / "execution").joinpath("trader.py").exists())
