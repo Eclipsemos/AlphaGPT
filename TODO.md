@@ -1,22 +1,36 @@
-# TODO
+# TODO: Binance Spot Factor Research
 
 ## Scope Lock
 
 AlphaGPT is a factor-mining and historical research tool for Binance Spot
-markets. It produces data snapshots, candidate formulas, and reproducible
-evaluation reports. It does not operate a portfolio or connect to a trading
-account.
+markets. The first release covers public USDT-market data at the `1h`
+interval. Its outputs are immutable datasets, versioned factor formulas, and
+reproducible historical evaluation reports. It does not operate a portfolio,
+connect to a trading account, or claim that a formula will remain profitable.
 
 The following are permanently excluded from this roadmap: paper/simulated
 trading services, Binance Testnet/Demo, API keys and private account APIs,
-wallets, order submission, live execution, and Binance Futures in the first
-release.
+wallets, order submission, live execution, and Binance Futures. Historical
+cost assumptions are evaluation inputs only; they are not an execution model.
+
+## Research Deliverables
+
+Every completed research batch must produce all of the following:
+
+- An immutable `dataset_snapshot_id` with provenance, universe, interval, time range, and quality results.
+- One or more versioned formula artifacts tied to the exact dataset, feature vocabulary, normalization state, code version, and seed.
+- Validation and walk-forward results with baselines, assumed costs, turnover, capacity proxy, and uncertainty across seeds.
+- A final untouched-test report for candidates selected without using test results.
+- An explicit `reject`, `research-only`, or `promising` research decision with machine-readable reasons.
+
+None of these artifacts authorizes or performs a trade.
 
 ## Delivery Order
 
 Work in order: B1 public data -> B2 data quality -> B3 features -> B4
 historical factor evaluation -> B5 mining workflow -> B6 documentation and
 research dashboard. A later phase must not hide an incomplete earlier phase.
+The current milestone is B5; B0-B4 are usable research foundations.
 
 ## Completed Research Foundation
 
@@ -70,7 +84,7 @@ research dashboard. A later phase must not hide an incomplete earlier phase.
 - [x] Define the first Binance feature vocabulary: returns, range/ATR, close position, momentum, realized volatility, base volume, quote volume, volume change, trade count, and taker-buy imbalance.
 - [x] Fit every normalization parameter on the training split only and apply it unchanged to validation/test data.
 - [x] Add warmup masks for rolling features so early incomplete windows cannot become valid samples.
-- [ ] Record feature names, formulas, normalization state, and feature-code version in every run artifact.
+- [x] Record feature names, formulas, normalization state, and feature-code version in formula artifacts.
 - [x] Version formula vocabularies so old Solana formulas cannot be silently evaluated against Binance feature indices.
 - [x] Add unit tests for each Binance feature and explicit no-future-data tests.
 
@@ -87,15 +101,29 @@ research dashboard. A later phase must not hide an incomplete earlier phase.
 
 ## B5: Run the Binance Mining Workflow
 
+- [x] Add a Binance-specific GPU miner using train-only cross-sectional IC rewards.
+- [x] Select candidate formulas on validation data without exposing test tensors during mining.
+- [x] Save versioned candidate artifacts with snapshot, feature, vocabulary, normalization, seed, and code metadata.
+- [x] Save checkpoints and RNG state so an interrupted CUDA run can resume reproducibly.
+- [x] Deduplicate commutative and otherwise canonical-equivalent formulas before candidate aggregation.
+- [x] Run smoke mining on a small Binance universe and verify that the test split is not accessed.
 - [ ] Add `--market binance-spot`, dataset snapshot, interval, and universe options to research commands.
 - [ ] Keep Solana and Binance run directories and report metadata explicitly separated.
 - [ ] Reject startup when the requested dataset snapshot, feature vocabulary, or cost model is missing or incompatible.
-- [ ] Run smoke mining on a small universe before full GPU batches.
 - [ ] Run at least five independent seeds for candidate discovery and reserve the test split until final comparison.
 - [ ] Run anchored and rolling walk-forward evaluation across multiple market regimes.
-- [ ] Deduplicate semantically equivalent formulas before multi-seed aggregation.
 - [ ] Rank candidates by validation and walk-forward criteria, never by test performance alone.
 - [ ] Generate a batch decision report with explicit `reject`, `research-only`, or `promising` status and reasons.
+- [ ] Add confidence intervals and cross-seed stability statistics to the batch report.
+- [ ] Add a one-command Binance batch workflow: snapshot validation, mining, aggregation, walk-forward evaluation, and final report.
+
+### B5 Acceptance Gate
+
+- [ ] A five-seed fixture batch completes from one command and can resume after interruption.
+- [ ] Re-running the same snapshot and seeds reproduces candidate identities and materially identical metrics.
+- [ ] Candidate selection code cannot read test tensors before the final evaluation stage.
+- [ ] The report rejects candidates that fail validation, regime stability, baseline, cost, or capacity criteria.
+- [ ] A positive test return alone can never produce `promising` status.
 
 ## B6: Documentation and Dashboard
 
@@ -105,6 +133,27 @@ research dashboard. A later phase must not hide an incomplete earlier phase.
 - [ ] Show dataset coverage, gaps, freshness, feature version, cost assumptions, and baseline comparisons.
 - [ ] Remove or hide wallet, SOL balance, Birdeye status, portfolio, and execution controls from the research dashboard.
 - [ ] Add an end-to-end acceptance command: build fixture dataset, mine a short batch, evaluate, and verify report schema.
+- [ ] Document the exact boundary between historical factor evaluation and prohibited simulated/live trading.
+
+## B7: Research Hardening
+
+- [ ] Add experiment manifests containing CLI arguments, package versions, Git commit, CUDA/device details, and wall-clock time.
+- [ ] Add leakage checks for universe construction, normalization, rolling features, labels, candidate selection, and report aggregation.
+- [ ] Add robustness tests across fees, slippage, rebalance cadence, maximum positions, weighting, and liquidity thresholds.
+- [ ] Add regime slices for trend, drawdown, high volatility, and low volatility without selecting regimes using future data.
+- [ ] Measure formula complexity and reject unstable formulas whose results depend on a few symbols or time periods.
+- [ ] Add deterministic fixture CI that requires no Binance API key, wallet, database account, or network access.
+
+## Definition of Done
+
+The Binance factor-research MVP is complete only when:
+
+- [ ] Public `1h` Spot data can be built into a quality-gated, immutable snapshot from one documented command.
+- [ ] A resumable five-seed mining batch produces canonical, versioned candidate formulas.
+- [ ] Validation and walk-forward selection happens before exactly one final untouched-test evaluation.
+- [ ] Results include baselines, realistic cost sensitivity, turnover, drawdown, exposure, capacity, and stability diagnostics.
+- [ ] The workflow is reproducible from a frozen fixture and documented for a new machine.
+- [ ] The dashboard contains research data only and exposes no wallet, portfolio, order, simulated-trading, or live-trading controls.
 
 ## Explicitly Out of Scope
 
@@ -115,3 +164,4 @@ research dashboard. A later phase must not hide an incomplete earlier phase.
 - [x] Binance Futures, leverage, margin, funding, or liquidation modeling in the first release.
 - [x] Solana/Jupiter live execution.
 - [x] Claims that a mined formula is profitable or production-ready.
+- [x] Persistent virtual balances, fills, positions, PnL ledgers, or other simulated-account state.
