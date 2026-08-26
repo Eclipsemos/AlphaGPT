@@ -81,6 +81,7 @@ DB_PASSWORD=replace-this-password
 DB_HOST=127.0.0.1
 DB_PORT=5432
 DB_NAME=crypto_quant
+DASHBOARD_CONTROL_TOKEN=replace-with-a-long-random-token
 ```
 
 No Birdeye key, Binance key, Solana RPC URL, or private key is used by the
@@ -220,14 +221,31 @@ constructs. AlphaGPT does not persist balances, positions, fills, or orders.
 
 ## Dashboard
 
+Set a private control token in `.env` before exposing the dashboard to another
+computer. Generate one with `openssl rand -hex 16`; `.env` is ignored by Git.
+
 ```bash
 streamlit run dashboard/app.py --server.address 0.0.0.0 --server.port 8501
 ```
 
 Open `http://127.0.0.1:8501` on the server or
 `http://<server-lan-ip>:8501` from another computer on the same trusted network.
-The dashboard is read-only and shows Binance snapshots, coverage, freshness,
-features, batch decisions, baselines, and cost sensitivity.
+The dashboard shows Binance snapshots, coverage, freshness, features, batch
+decisions, baselines, and cost sensitivity. Its password-protected `Mining`
+tab can also configure and launch one detached GPU research batch, report
+per-seed and per-step progress, tail the worker log, stop the process, and
+resume a stopped or failed run from compatible checkpoints.
+
+Dashboard jobs continue after the browser or SSH session closes. Job state and
+logs are stored under `runs/dashboard_jobs/`; research artifacts are stored
+under `runs/binance/<run-id>/`. Only one dashboard-launched GPU batch may run at
+a time. The controls accept bounded research parameters and never execute
+user-supplied shell commands.
+
+The control token protects compute access, not network transport. Use a trusted
+LAN, SSH tunnel, VPN, or an HTTPS/authenticating reverse proxy when the server
+is reachable beyond a trusted network. The dashboard still has no account,
+API-key, portfolio, simulated-trading, order, or live-execution integration.
 
 ## Verification
 

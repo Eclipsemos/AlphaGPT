@@ -20,7 +20,7 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any, Callable, Iterable, Sequence
 
 import torch
 
@@ -526,6 +526,7 @@ def run_batch(
     resume: bool = False,
     use_lord_regularization: bool = True,
     loader_override: Any | None = None,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     if not seeds or len(set(seeds)) != len(seeds):
         raise ValueError("Batch seeds must be non-empty and unique")
@@ -540,6 +541,14 @@ def run_batch(
     destination.mkdir(parents=True, exist_ok=True)
     started_at = datetime.now(timezone.utc)
     monotonic_start = time.monotonic()
+    if progress_callback is not None:
+        progress_callback(
+            {
+                "phase": "loading_data",
+                "message": "Loading immutable dataset snapshot",
+                "percent": 0.0,
+            }
+        )
     loader = loader_override or BinanceDataLoader(snapshot_id, symbols=symbols)
     if getattr(loader, "feat_tensor", None) is None:
         loader.load_data()
@@ -574,7 +583,20 @@ def run_batch(
     seed_payloads: list[dict[str, Any]] = []
     seed_runs: list[dict[str, Any]] = []
     try:
-        for seed in seeds:
+        for seed_index, seed in enumerate(seeds):
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "phase": "mining",
+                        "message": f"Starting seed {int(seed)}",
+                        "seed": int(seed),
+                        "seed_index": seed_index + 1,
+                        "seed_count": len(seeds),
+                        "step": 0,
+                        "steps": mining_config.steps,
+                        "percent": 90.0 * seed_index / len(seeds),
+                    }
+                )
             seed_dir = destination / f"seed_{int(seed)}"
             completed = (
                 _load_completed_seed(seed_dir, loader.research_metadata, int(seed), mining_config)
@@ -591,6 +613,22 @@ def run_batch(
                     config=mining_config,
                     use_lord_regularization=use_lord_regularization,
                     loader=loader,
+                    progress_callback=(
+                        lambda event, index=seed_index, current_seed=int(seed): progress_callback(
+                            {
+                                **event,
+                                "message": f"Mining seed {current_seed}",
+                                "seed": current_seed,
+                                "seed_index": index + 1,
+                                "seed_count": len(seeds),
+                                "percent": 90.0
+                                * (index + event.get("step", 0) / mining_config.steps)
+                                / len(seeds),
+                            }
+                        )
+                        if progress_callback is not None
+                        else None
+                    ),
                 )
                 resumed = resume and engine.checkpoint_path.is_file()
                 engine.train(resume=resumed)
@@ -608,7 +646,29 @@ def run_batch(
                     "checkpoint": str(seed_dir / "binance_training_checkpoint.pt"),
                 }
             )
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "phase": "mining",
+                        "message": f"Completed seed {int(seed)}",
+                        "seed": int(seed),
+                        "seed_index": seed_index + 1,
+                        "seed_count": len(seeds),
+                        "step": mining_config.steps,
+                        "steps": mining_config.steps,
+                        "unique_candidate_count": len(completed),
+                        "percent": 90.0 * (seed_index + 1) / len(seeds),
+                    }
+                )
 
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "phase": "aggregation",
+                    "message": "Deduplicating candidates across seeds",
+                    "percent": 91.0,
+                }
+            )
         aggregated = aggregate_candidates(seed_payloads)
         if not aggregated:
             raise RuntimeError("No valid Binance candidates were produced by any seed")
@@ -623,7 +683,17 @@ def run_batch(
         )
         shortlist = aggregated[: min(shortlist_size, len(aggregated))]
         evaluated = []
-        for candidate in shortlist:
+        for candidate_index, candidate in enumerate(shortlist):
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "phase": "walk_forward",
+                        "message": "Running validation walk-forward",
+                        "candidate": candidate_index + 1,
+                        "candidate_count": len(shortlist),
+                        "percent": 92.0 + 5.0 * candidate_index / max(1, len(shortlist)),
+                    }
+                )
             value = dict(candidate)
             value["walk_forward"] = evaluate_validation_walk_forward(
                 value, loader, evaluation_config, window_count
@@ -660,6 +730,14 @@ def run_batch(
         selected_path = destination / "selected_formula.json"
         write_json(selected_path, artifact)
 
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "phase": "final_evaluation",
+                    "message": "Evaluating the selected formula on the untouched test split",
+                    "percent": 98.0,
+                }
+            )
         final_path = destination / "final_evaluation_report.json"
         final_evaluation = evaluate_artifact(
             artifact,
@@ -719,6 +797,14 @@ def run_batch(
             }
         )
         write_json(manifest_path, manifest)
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "phase": "complete",
+                    "message": "Research batch complete",
+                    "percent": 100.0,
+                }
+            )
         return result
     except Exception as exc:
         manifest.update(
@@ -730,6 +816,13 @@ def run_batch(
             }
         )
         write_json(manifest_path, manifest)
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "phase": "failed",
+                    "message": f"{type(exc).__name__}: {exc}",
+                }
+            )
         raise
 
 

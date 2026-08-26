@@ -7,7 +7,7 @@ import json
 import random
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import torch
@@ -61,6 +61,7 @@ class BinanceAlphaEngine:
         config: BinanceMiningConfig | None = None,
         use_lord_regularization: bool = True,
         loader: Any | None = None,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ):
         self.seed = int(seed)
         self.config = config or BinanceMiningConfig()
@@ -82,6 +83,7 @@ class BinanceAlphaEngine:
             self.model.parameters(), lr=self.config.learning_rate
         )
         self.use_lord_regularization = use_lord_regularization
+        self.progress_callback = progress_callback
         self.lord_optimizer = (
             NewtonSchulzLowRankDecay(
                 self.model.named_parameters(),
@@ -269,6 +271,18 @@ class BinanceAlphaEngine:
                     "best_validation_score": best_validation,
                 }
             )
+            if self.progress_callback is not None:
+                self.progress_callback(
+                    {
+                        "phase": "mining",
+                        "step": step + 1,
+                        "steps": self.config.steps,
+                        "average_reward": float(rewards.mean().item()),
+                        "valid_formula_count": len(valid_formulas),
+                        "unique_candidate_count": len(self.candidates),
+                        "best_validation_score": best_validation,
+                    }
+                )
             progress.set_postfix(
                 avg=f"{rewards.mean().item():.3f}",
                 candidates=len(self.candidates),

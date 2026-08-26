@@ -50,6 +50,7 @@ class BinanceMiningTests(unittest.TestCase):
         scorer_source = inspect.getsource(BinanceAlphaEngine._score_formula)
         self.assertNotIn("test_", source)
         self.assertNotIn('"test"', scorer_source)
+        self.assertIn("progress_callback", source)
 
     def test_checkpoint_cuda_state_is_normalized_before_restore(self):
         source = inspect.getsource(BinanceAlphaEngine.load_checkpoint)

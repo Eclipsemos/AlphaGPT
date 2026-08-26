@@ -135,6 +135,10 @@ The current milestone is B7 research hardening; B0-B6 are implemented.
 - [x] Remove wallet, SOL balance, Birdeye status, portfolio, and execution controls from the research dashboard.
 - [x] Add an end-to-end acceptance command: build fixture dataset, mine a short batch, evaluate, and verify report schema.
 - [x] Document the exact boundary between historical factor evaluation and prohibited simulated/live trading.
+- [x] Add an authenticated dashboard control plane for bounded Binance factor-mining batch configuration.
+- [x] Run dashboard mining as a detached, persistent process with single-GPU-job exclusion.
+- [x] Show structured phase, seed, step, candidate, validation-score, elapsed-time, and worker-log progress.
+- [x] Add verified process stopping and compatible checkpoint resume controls without exposing a shell command surface.
 
 ## B7: Research Hardening
 
