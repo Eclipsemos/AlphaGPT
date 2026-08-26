@@ -56,13 +56,13 @@ research dashboard. A later phase must not hide an incomplete earlier phase.
 
 ## B2: Validate Dataset Quality and Reproducibility
 
-- [ ] Check primary-key uniqueness, monotonic timestamps, expected cadence, and OHLC invariants.
-- [ ] Reject negative prices/volumes and record missing or incomplete bars; never silently forward-fill research labels.
-- [ ] Detect symbol listing/delisting boundaries and exclude pre-listing or post-delisting periods.
-- [ ] Measure per-symbol and per-period coverage and fail snapshots below a configured threshold.
-- [ ] Save immutable universe snapshots to prevent survivorship bias from today's symbol list.
-- [ ] Add tests for Binance response parsing, pagination boundaries, timestamp units, duplicate pages, gaps, retries, and idempotent inserts.
-- [ ] Add a small frozen Binance fixture with an expected dataset fingerprint for deterministic integration tests.
+- [x] Check primary-key uniqueness, monotonic timestamps, expected cadence, and OHLC invariants.
+- [x] Reject negative prices/volumes and record missing or incomplete bars; never silently forward-fill research labels.
+- [x] Detect symbol listing/delisting boundaries and exclude pre-listing or post-delisting periods.
+- [x] Measure per-symbol and per-period coverage and fail snapshots below a configured threshold.
+- [x] Save immutable point-in-time universe snapshots and explicitly flag the initial current-universe survivorship limitation.
+- [x] Add tests for Binance response parsing, pagination boundaries, timestamp units, duplicate pages, gaps, retries, and idempotent inserts.
+- [x] Add a small frozen Binance fixture with an expected dataset fingerprint for deterministic integration tests.
 
 ## B3: Generalize Features for Binance
 

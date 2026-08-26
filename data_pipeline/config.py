@@ -30,6 +30,7 @@ class Config:
         "BINANCE_ARCHIVE_BASE_URL",
         "https://data.binance.vision/data/spot/monthly/klines",
     )
+    BINANCE_MIN_COVERAGE = float(os.getenv("BINANCE_MIN_COVERAGE", "0.995"))
     BINANCE_RULES = BinanceUniverseRules(
         history_days=int(os.getenv("BINANCE_HISTORY_DAYS", "365")),
         max_symbols=int(os.getenv("BINANCE_MAX_SYMBOLS", "50")),

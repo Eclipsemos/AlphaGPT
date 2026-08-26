@@ -25,6 +25,7 @@ from .binance_archive import (
 )
 from .config import Config
 from .db_manager import DBManager
+from .binance_quality import inspect_symbol_bars
 from .providers.binance_spot import BinanceSpotProvider
 
 
@@ -45,6 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--archive-base-url", default=Config.BINANCE_ARCHIVE_BASE_URL)
     parser.add_argument("--output", type=Path, default=Path("runs/binance_latest/dataset_report.json"))
     parser.add_argument("--code-version", default=None)
+    parser.add_argument("--minimum-coverage", type=float, default=Config.BINANCE_MIN_COVERAGE)
     parser.add_argument("--dry-run", action="store_true", help="Discover and report symbols without downloading bars")
     return parser
 
@@ -96,6 +98,8 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
         )
 
     expected_bar_count = int((end_time - start_time).total_seconds() // 3600)
+    if not 0 < args.minimum_coverage <= 1:
+        raise ValueError("minimum-coverage must be in (0, 1]")
     db = DBManager()
     await db.connect()
     try:
@@ -118,11 +122,13 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
                 end_time,
                 source=("binance-spot-archive+rest" if args.source == "archive" else provider.source_name),
                 code_version=args.code_version or current_code_version(),
+                instruments=instruments,
             )
             snapshot_id = dataset_snapshot_id(canonical)
             retrieved_at = datetime.now(UTC)
             coverage: list[dict[str, object]] = []
             downloaded_bars = 0
+            quality_reports: list[dict[str, object]] = []
             if args.dry_run:
                 coverage = [
                     {
@@ -191,6 +197,20 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
                             start_time,
                             end_time,
                         )
+                        stored_bars = await db.fetch_market_bars(
+                            instrument.symbol,
+                            rules.interval,
+                            start_time,
+                            end_time,
+                        )
+                        quality = inspect_symbol_bars(
+                            instrument,
+                            stored_bars,
+                            start_time,
+                            end_time,
+                            minimum_coverage=args.minimum_coverage,
+                        )
+                        quality_reports.append(quality.as_dict())
                         coverage.append(
                             {
                                 "symbol": instrument.symbol,
@@ -199,7 +219,7 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
                                 "response_start_time": stored["response_start_time"],
                                 "response_end_time": stored["response_end_time"],
                                 "bar_count": stored["bar_count"],
-                                "expected_bar_count": expected_bar_count,
+                                "expected_bar_count": quality.expected_bar_count,
                                 "archive_checksum": aggregate_archive_checksum(archive_metadata),
                                 "source_metadata": {
                                     "provider": (
@@ -209,6 +229,7 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
                                     ),
                                     "provider_status": provider.status,
                                     "archives": archive_metadata,
+                                    "quality": quality.as_dict(),
                                 },
                                 "retrieved_at": retrieved_at,
                             }
@@ -217,12 +238,16 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
                     if archive_provider is not None:
                         await archive_provider.__aexit__(None, None, None)
             if not args.dry_run:
-                await db.create_dataset_snapshot(
-                    snapshot_id,
-                    canonical,
-                    canonical["symbols"],
-                    coverage,
-                )
+                quality_passed = all(item["accepted"] for item in quality_reports)
+                if quality_passed:
+                    await db.create_dataset_snapshot(
+                        snapshot_id,
+                        canonical,
+                        canonical["symbols"],
+                        coverage,
+                    )
+            else:
+                quality_passed = None
             report = {
                 "snapshot_id": snapshot_id,
                 "dry_run": args.dry_run,
@@ -233,6 +258,9 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
                 "downloaded_bars": downloaded_bars,
                 "stored_bars": sum(int(item["bar_count"]) for item in coverage),
                 "expected_bars": expected_bar_count * len(symbols),
+                "quality_passed": quality_passed,
+                "quality": quality_reports,
+                "snapshot_created": bool(quality_passed),
                 "coverage": coverage,
                 "provider_status": provider.status,
                 "canonical_payload": canonical,
@@ -253,6 +281,9 @@ def main() -> None:
     report = asyncio.run(run(args))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True, default=json_default) + "\n")
+    if report["quality_passed"] is False:
+        logger.error("Binance dataset failed quality gates; no research snapshot was created")
+        raise SystemExit(2)
     if report["dry_run"]:
         logger.success("Binance discovery complete: {} symbols", len(report["symbols"]))
     else:

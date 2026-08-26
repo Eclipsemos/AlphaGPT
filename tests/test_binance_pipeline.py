@@ -1,12 +1,20 @@
 import asyncio
 import hashlib
 import io
+import json
 import unittest
 import zipfile
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
-from data_pipeline.binance_contracts import BinanceBar, BinanceInstrument, BinanceUniverseRules
+from data_pipeline.binance_contracts import (
+    BinanceBar,
+    BinanceInstrument,
+    BinanceUniverseRules,
+    dataset_snapshot_id,
+    dataset_snapshot_payload,
+)
 from data_pipeline.binance_archive import (
     BinanceArchiveError,
     BinanceSpotArchiveProvider,
@@ -16,6 +24,7 @@ from data_pipeline.binance_archive import (
     parse_archive_zip,
 )
 from data_pipeline.db_manager import DBManager
+from data_pipeline.binance_quality import bars_fingerprint, inspect_symbol_bars
 from data_pipeline.providers.binance_spot import (
     BinanceSpotProvider,
     instrument_matches_rules,
@@ -118,7 +127,7 @@ class FakePool:
         return FakeAcquire(self.connection)
 
 
-def instrument(symbol="BTCUSDT", onboard=None, volume="20000000"):
+def instrument(symbol="BTCUSDT", onboard=None, offboard=None, volume="20000000"):
     row = {
         "symbol": symbol,
         "status": "TRADING",
@@ -132,6 +141,8 @@ def instrument(symbol="BTCUSDT", onboard=None, volume="20000000"):
     }
     if onboard is not None:
         row["onboardDate"] = int(onboard.timestamp() * 1000)
+    if offboard is not None:
+        row["offboardDate"] = int(offboard.timestamp() * 1000)
     return row
 
 
@@ -306,6 +317,124 @@ class BinanceArchiveTests(unittest.IsolatedAsyncioTestCase):
                 await provider.monthly_bars(
                     "BTCUSDT", "1h", start, datetime(2026, 2, 1, tzinfo=UTC)
                 )
+
+
+class BinanceQualityTests(unittest.TestCase):
+    def setUp(self):
+        path = Path(__file__).parent / "fixtures" / "binance_bars_v1.json"
+        self.fixture = json.loads(path.read_text())
+        self.bars = [
+            parse_kline(
+                self.fixture["symbol"],
+                self.fixture["interval"],
+                row,
+                self.fixture["source"],
+            )
+            for row in self.fixture["rows"]
+        ]
+        self.instrument = parse_instrument(
+            instrument(onboard=datetime(2025, 1, 1, tzinfo=UTC)),
+            Decimal("20000000"),
+        )
+
+    def test_frozen_fixture_has_expected_fingerprint(self):
+        self.assertEqual(bars_fingerprint(self.bars), self.fixture["expected_fingerprint"])
+
+    def test_complete_fixture_passes_quality_gate(self):
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        report = inspect_symbol_bars(
+            self.instrument,
+            self.bars,
+            start,
+            start + timedelta(hours=3),
+            minimum_coverage=1.0,
+        )
+        self.assertTrue(report.accepted)
+        self.assertEqual(report.coverage_ratio, 1.0)
+        self.assertEqual(report.missing_bar_count, 0)
+        self.assertEqual(report.period_coverage[0]["period"], "2026-01")
+
+    def test_quality_gate_records_gaps_without_forward_fill(self):
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        report = inspect_symbol_bars(
+            self.instrument,
+            [self.bars[0], self.bars[2]],
+            start,
+            start + timedelta(hours=3),
+            minimum_coverage=1.0,
+        )
+        self.assertFalse(report.accepted)
+        self.assertEqual(report.missing_bar_count, 1)
+        self.assertEqual(report.bar_count, 2)
+        self.assertIn("coverage", report.reasons[0])
+
+    def test_quality_gate_rejects_duplicate_invalid_ohlc_and_negative_volume(self):
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        bad = BinanceBar(
+            **{
+                **self.bars[1].__dict__,
+                "high": Decimal("90"),
+                "base_volume": Decimal("-1"),
+            }
+        )
+        report = inspect_symbol_bars(
+            self.instrument,
+            [self.bars[0], bad, bad, self.bars[2]],
+            start,
+            start + timedelta(hours=3),
+            minimum_coverage=0.5,
+        )
+        self.assertFalse(report.accepted)
+        self.assertEqual(report.duplicate_rows, 1)
+        self.assertEqual(report.invalid_ohlc_rows, 2)
+        self.assertEqual(report.negative_volume_rows, 2)
+
+    def test_quality_gate_rejects_post_delisting_bars(self):
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        delisted = parse_instrument(
+            instrument(
+                onboard=datetime(2025, 1, 1, tzinfo=UTC),
+                offboard=start + timedelta(hours=2),
+            ),
+            Decimal("20000000"),
+        )
+        report = inspect_symbol_bars(
+            delisted,
+            self.bars,
+            start,
+            start + timedelta(hours=3),
+            minimum_coverage=1.0,
+        )
+        self.assertFalse(report.accepted)
+        self.assertEqual(report.expected_bar_count, 2)
+        self.assertEqual(report.post_delisting_rows, 1)
+
+    def test_snapshot_id_freezes_rank_and_instrument_metadata(self):
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        second = parse_instrument(
+            instrument("ETHUSDT", onboard=datetime(2024, 1, 1, tzinfo=UTC)),
+            Decimal("18000000"),
+        )
+        payload = dataset_snapshot_payload(
+            BinanceUniverseRules(max_symbols=2),
+            ["BTCUSDT", "ETHUSDT"],
+            start,
+            start + timedelta(days=365),
+            source="fixture",
+            code_version="test",
+            instruments=[self.instrument, second],
+        )
+        reversed_payload = dataset_snapshot_payload(
+            BinanceUniverseRules(max_symbols=2),
+            ["BTCUSDT", "ETHUSDT"],
+            start,
+            start + timedelta(days=365),
+            source="fixture",
+            code_version="test",
+            instruments=[second, self.instrument],
+        )
+        self.assertEqual(payload["instruments"][0]["selection_rank"], 1)
+        self.assertNotEqual(dataset_snapshot_id(payload), dataset_snapshot_id(reversed_payload))
 
 
 class BinanceDBTests(unittest.IsolatedAsyncioTestCase):

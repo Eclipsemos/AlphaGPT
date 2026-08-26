@@ -64,6 +64,7 @@ class BinanceInstrument:
     base_asset: str
     quote_asset: str
     onboard_time: datetime | None
+    offboard_time: datetime | None
     quantity_step: Decimal
     minimum_quantity: Decimal
     minimum_notional: Decimal
@@ -102,6 +103,7 @@ def dataset_snapshot_payload(
     *,
     source: str,
     code_version: str,
+    instruments: Sequence[BinanceInstrument] | None = None,
 ) -> dict[str, Any]:
     if start_time.tzinfo is None or end_time.tzinfo is None:
         raise ValueError("Dataset snapshot times must be timezone-aware")
@@ -110,7 +112,7 @@ def dataset_snapshot_payload(
     normalized_symbols = sorted({str(symbol).upper() for symbol in symbols})
     if not normalized_symbols:
         raise ValueError("A dataset snapshot requires at least one symbol")
-    return {
+    payload = {
         "schema_version": BINANCE_DATASET_SCHEMA_VERSION,
         "feature_schema_version": BINANCE_FEATURE_SCHEMA_VERSION,
         "rules": rules.as_dict(),
@@ -120,6 +122,31 @@ def dataset_snapshot_payload(
         "source": source,
         "code_version": code_version,
     }
+    if instruments is not None:
+        instrument_symbols = {item.symbol.upper() for item in instruments}
+        if instrument_symbols != set(normalized_symbols):
+            raise ValueError("Snapshot instruments must match snapshot symbols")
+        payload["instruments"] = [
+            {
+                "selection_rank": rank,
+                "venue": item.venue,
+                "market_type": item.market_type,
+                "symbol": item.symbol,
+                "status": item.status,
+                "base_asset": item.base_asset,
+                "quote_asset": item.quote_asset,
+                "onboard_time": item.onboard_time.isoformat() if item.onboard_time else None,
+                "offboard_time": item.offboard_time.isoformat() if item.offboard_time else None,
+                "quantity_step": str(item.quantity_step),
+                "minimum_quantity": str(item.minimum_quantity),
+                "minimum_notional": str(item.minimum_notional),
+                "tick_size": str(item.tick_size),
+                "quote_volume": str(item.quote_volume),
+                "raw_filters": item.raw_filters,
+            }
+            for rank, item in enumerate(instruments, start=1)
+        ]
+    return payload
 
 
 def dataset_snapshot_id(payload: dict[str, Any]) -> str:

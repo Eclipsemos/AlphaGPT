@@ -22,6 +22,7 @@ def binance_schema_statements() -> tuple[str, ...]:
             base_asset TEXT NOT NULL,
             quote_asset TEXT NOT NULL,
             onboard_time TIMESTAMPTZ,
+            offboard_time TIMESTAMPTZ,
             quantity_step NUMERIC NOT NULL,
             minimum_quantity NUMERIC NOT NULL,
             minimum_notional NUMERIC NOT NULL,
@@ -78,10 +79,13 @@ def binance_schema_statements() -> tuple[str, ...]:
             snapshot_id TEXT NOT NULL REFERENCES dataset_snapshots(snapshot_id),
             symbol TEXT NOT NULL,
             rank INTEGER NOT NULL,
+            instrument_payload JSONB,
             PRIMARY KEY (snapshot_id, symbol),
             UNIQUE (snapshot_id, rank)
         );
         """,
+        "ALTER TABLE market_instruments ADD COLUMN IF NOT EXISTS offboard_time TIMESTAMPTZ;",
+        "ALTER TABLE dataset_snapshot_instruments ADD COLUMN IF NOT EXISTS instrument_payload JSONB;",
         """
         CREATE TABLE IF NOT EXISTS dataset_snapshot_coverage (
             snapshot_id TEXT NOT NULL REFERENCES dataset_snapshots(snapshot_id),
@@ -182,6 +186,7 @@ class DBManager:
                 item.base_asset,
                 item.quote_asset,
                 item.onboard_time,
+                item.offboard_time,
                 item.quantity_step,
                 item.minimum_quantity,
                 item.minimum_notional,
@@ -196,16 +201,17 @@ class DBManager:
                 """
                 INSERT INTO market_instruments (
                     venue, market_type, symbol, status, base_asset, quote_asset,
-                    onboard_time, quantity_step, minimum_quantity,
+                    onboard_time, offboard_time, quantity_step, minimum_quantity,
                     minimum_notional, tick_size, quote_volume, raw_filters
                 ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb
                 )
                 ON CONFLICT (venue, market_type, symbol) DO UPDATE SET
                     status = EXCLUDED.status,
                     base_asset = EXCLUDED.base_asset,
                     quote_asset = EXCLUDED.quote_asset,
                     onboard_time = EXCLUDED.onboard_time,
+                    offboard_time = EXCLUDED.offboard_time,
                     quantity_step = EXCLUDED.quantity_step,
                     minimum_quantity = EXCLUDED.minimum_quantity,
                     minimum_notional = EXCLUDED.minimum_notional,
@@ -318,6 +324,50 @@ class DBManager:
             )
         return dict(row)
 
+    async def fetch_market_bars(
+        self,
+        symbol: str,
+        interval: str,
+        start_time: datetime,
+        end_time: datetime,
+    ) -> list[BinanceBar]:
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT symbol, interval, open_time, close_time, open, high, low, close,
+                       base_volume, quote_volume, trade_count,
+                       taker_buy_base_volume, taker_buy_quote_volume, source
+                FROM market_bars
+                WHERE venue = 'binance' AND market_type = 'spot'
+                    AND symbol = $1 AND interval = $2
+                    AND open_time >= $3 AND open_time < $4
+                ORDER BY open_time
+                """,
+                symbol,
+                interval,
+                start_time,
+                end_time,
+            )
+        return [
+            BinanceBar(
+                symbol=str(row["symbol"]),
+                interval=str(row["interval"]),
+                open_time=row["open_time"],
+                close_time=row["close_time"],
+                open=row["open"],
+                high=row["high"],
+                low=row["low"],
+                close=row["close"],
+                base_volume=row["base_volume"],
+                quote_volume=row["quote_volume"],
+                trade_count=int(row["trade_count"]),
+                taker_buy_base_volume=row["taker_buy_base_volume"],
+                taker_buy_quote_volume=row["taker_buy_quote_volume"],
+                source=str(row["source"]),
+            )
+            for row in rows
+        ]
+
     async def create_dataset_snapshot(
         self,
         snapshot_id: str,
@@ -355,11 +405,27 @@ class DBManager:
                 )
                 await conn.executemany(
                     """
-                    INSERT INTO dataset_snapshot_instruments (snapshot_id, symbol, rank)
-                    VALUES ($1, $2, $3)
+                    INSERT INTO dataset_snapshot_instruments (
+                        snapshot_id, symbol, rank, instrument_payload
+                    )
+                    VALUES ($1, $2, $3, $4::jsonb)
                     ON CONFLICT (snapshot_id, symbol) DO NOTHING
                     """,
-                    [(snapshot_id, symbol, rank) for rank, symbol in enumerate(symbols, start=1)],
+                    [
+                        (
+                            snapshot_id,
+                            item["symbol"],
+                            int(item["selection_rank"]),
+                            json.dumps(item, sort_keys=True, separators=(",", ":")),
+                        )
+                        for item in payload.get(
+                            "instruments",
+                            [
+                                {"symbol": symbol, "selection_rank": rank}
+                                for rank, symbol in enumerate(symbols, start=1)
+                            ],
+                        )
+                    ],
                 )
                 await conn.executemany(
                     """

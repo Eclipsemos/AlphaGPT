@@ -222,12 +222,14 @@ def parse_instrument(row: dict[str, Any], quote_volume: Decimal) -> BinanceInstr
         notional = filters.get("NOTIONAL") or filters.get("MIN_NOTIONAL") or {}
         price_filter = filters.get("PRICE_FILTER", {})
         onboard_value = row.get("onboardDate")
+        offboard_value = row.get("offboardDate") or row.get("delistTime")
         return BinanceInstrument(
             symbol=str(row["symbol"]).upper(),
             status=str(row.get("status", "UNKNOWN")),
             base_asset=str(row["baseAsset"]).upper(),
             quote_asset=str(row["quoteAsset"]).upper(),
             onboard_time=timestamp_to_datetime(int(onboard_value)) if onboard_value else None,
+            offboard_time=timestamp_to_datetime(int(offboard_value)) if offboard_value else None,
             quantity_step=Decimal(str(lot.get("stepSize", "0"))),
             minimum_quantity=Decimal(str(lot.get("minQty", "0"))),
             minimum_notional=Decimal(str(notional.get("minNotional", "0"))),

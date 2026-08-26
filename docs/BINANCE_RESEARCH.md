@@ -62,3 +62,19 @@ aggregate checksum are stored in snapshot coverage metadata.
 The command writes `runs/binance_latest/dataset_report.json`. A rerun resumes
 after the latest stored bar for each symbol, while primary-key upserts make
 overlapping responses idempotent.
+
+The report includes a quality result for every symbol. A research snapshot is
+created only when every symbol meets `BINANCE_MIN_COVERAGE` (default `0.995`)
+and passes timestamp, gap, OHLC, volume, listing-boundary, and completed-bar
+checks. Failed runs retain raw bars and write diagnostics, but do not create a
+dataset snapshot for factor research.
+
+## Known Universe Limitation
+
+The first snapshot is selected from the symbols returned by the current public
+`exchangeInfo` and `ticker/24hr` responses. Freezing that response makes future
+runs reproducible, but it cannot reconstruct symbols that were already delisted
+before AlphaGPT began collecting snapshots. Historical studies using the first
+snapshot therefore retain current-universe survivorship bias. Accumulating
+immutable point-in-time snapshots reduces this limitation prospectively; reports
+must not claim that the initial snapshot is survivorship-bias free.
