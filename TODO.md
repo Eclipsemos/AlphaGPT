@@ -76,14 +76,14 @@ research dashboard. A later phase must not hide an incomplete earlier phase.
 
 ## B4: Historical Factor Evaluation (No Trading Simulator)
 
-- [ ] Replace Solana liquidity gates and the fixed `0.6%` fee with configurable research cost assumptions for sensitivity analysis; do not build an order or account simulator.
-- [ ] Execute signals no earlier than the next bar open and test signal/entry/exit alignment.
-- [ ] Define a deterministic cross-sectional evaluation protocol: ranking, maximum selected symbols, equal/risk weights, and rebalance cadence.
-- [ ] Attribute turnover and assumed costs to historical factor results; do not model order routing, balances, or execution.
-- [ ] Annualize volatility and Sharpe from the configured bar interval instead of the number of bars in the evaluation slice.
-- [ ] Add exposure, capacity proxy, turnover, cost attribution, and per-symbol contribution to research reports.
-- [ ] Add Binance baselines: equal-weight cross-section, BTCUSDT reference return, cross-sectional momentum, and random rank.
-- [ ] Add hand-calculated golden tests for compounding, fees, rebalances, missing symbols, and delisting exits.
+- [x] Replace Solana liquidity gates and the fixed `0.6%` fee with configurable research cost assumptions for sensitivity analysis; do not build an order or account simulator.
+- [x] Execute signals no earlier than the next bar open and test signal/entry/exit alignment.
+- [x] Define a deterministic cross-sectional evaluation protocol: ranking, maximum selected symbols, equal/risk weights, and rebalance cadence.
+- [x] Attribute turnover and assumed costs to historical factor results; do not model order routing, balances, or execution.
+- [x] Annualize volatility and Sharpe from the configured bar interval instead of the number of bars in the evaluation slice.
+- [x] Add exposure, capacity proxy, turnover, cost attribution, and per-symbol contribution to research reports.
+- [x] Add Binance baselines: equal-weight cross-section, BTCUSDT reference return, cross-sectional momentum, and random rank.
+- [x] Add hand-calculated golden tests for compounding, fees, rebalances, missing symbols, and delisting exits.
 
 ## B5: Run the Binance Mining Workflow
 

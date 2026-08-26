@@ -30,6 +30,7 @@ class BinanceDataLoader:
         self.raw_data_cache: dict[str, torch.Tensor] | None = None
         self.observed_mask: torch.Tensor | None = None
         self.feature_valid: torch.Tensor | None = None
+        self.signal_valid: torch.Tensor | None = None
         self.feat_tensor: torch.Tensor | None = None
         self.feature_normalization: dict[str, Any] | None = None
         self.target_ret: torch.Tensor | None = None
@@ -47,6 +48,9 @@ class BinanceDataLoader:
         self.train_target_valid = None
         self.validation_target_valid = None
         self.test_target_valid = None
+        self.train_signal_valid = None
+        self.validation_signal_valid = None
+        self.test_signal_valid = None
 
     @staticmethod
     def _slice_raw(raw_data: dict[str, torch.Tensor], window: slice) -> dict[str, torch.Tensor]:
@@ -71,6 +75,7 @@ class BinanceDataLoader:
         assert self.raw_data_cache is not None
         assert self.target_ret is not None
         assert self.target_valid is not None
+        assert self.signal_valid is not None
         self.train_feat_tensor = self.feat_tensor[:, :, self.splits.train]
         self.validation_feat_tensor = self.feat_tensor[:, :, self.splits.validation]
         self.test_feat_tensor = self.feat_tensor[:, :, self.splits.test]
@@ -83,6 +88,9 @@ class BinanceDataLoader:
         self.train_target_valid = self.target_valid[:, self.splits.train].clone()
         self.validation_target_valid = self.target_valid[:, self.splits.validation].clone()
         self.test_target_valid = self.target_valid[:, self.splits.test].clone()
+        self.train_signal_valid = self.signal_valid[:, self.splits.train].clone()
+        self.validation_signal_valid = self.signal_valid[:, self.splits.validation].clone()
+        self.test_signal_valid = self.signal_valid[:, self.splits.test].clone()
         self.train_target_ret[:, -2:] = 0
         self.validation_target_ret[:, -2:] = 0
         self.test_target_ret[:, -2:] = 0
@@ -207,11 +215,12 @@ class BinanceDataLoader:
         feature_set = BinanceFeatureEngineer.compute(raw, self.observed_mask, fit_end=fit_end)
         self.feat_tensor = feature_set.values
         self.feature_valid = feature_set.valid
+        self.signal_valid = self.feature_valid.all(dim=1)
         self.feature_normalization = feature_set.normalization.as_dict()
         self.target_ret, self.target_valid = compute_forward_returns(
             raw["open"], self.observed_mask, return_valid=True
         )
-        self.target_valid &= self.feature_valid.all(dim=1)
+        self.target_valid &= self.signal_valid
         self.splits = self._build_splits(self.feat_tensor.shape[-1])
         self._assign_split_views()
 

@@ -96,3 +96,36 @@ Saved Binance formulas use a versioned artifact contract containing the market,
 formula vocabulary, token names, dataset snapshot ID, feature names, warmup
 rules, and normalization state. A legacy Solana formula or bare token list is
 not compatible with `binance-formula-v1`.
+
+## Historical Evaluation
+
+Binance factors are evaluated cross-sectionally. A factor observed after hour
+`t` ranks the available symbols and forms research weights no earlier than the
+`t+1` open; its label is the simple return from the `t+1` open to the `t+2`
+open. The evaluator supports equal or inverse-risk weights, a maximum selected
+symbol count, and an hourly rebalance cadence.
+
+Taker fees and slippage are configurable assumptions charged only when weights
+change, including a terminal exit at the evaluation boundary. They do not
+represent submitted orders, account balances, fills, or an execution engine.
+Reports include fixed-1h annualized volatility/Sharpe, drawdown, exposure,
+turnover, cost attribution, quote-volume participation as a capacity proxy,
+rank IC, and per-symbol contributions.
+
+Evaluate a versioned formula artifact:
+
+```bash
+python -m model_core.evaluate_binance \
+  --formula runs/binance/<run>/best_formula.json \
+  --snapshot-id <snapshot-id> \
+  --weighting equal \
+  --max-positions 10 \
+  --rebalance-hours 24 \
+  --taker-fee-bps 10 \
+  --slippage-bps 5
+```
+
+The report always includes equal-weight cross-section, BTCUSDT reference,
+cross-sectional momentum, and seeded random-rank baselines, plus configurable
+cost-sensitivity scenarios. These are historical research statistics, not a
+claim of future profitability or production readiness.
