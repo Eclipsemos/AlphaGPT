@@ -1,6 +1,7 @@
 import unittest
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import torch
 import pandas as pd
@@ -23,6 +24,13 @@ from data_pipeline.db_manager import binance_schema_statements
 
 
 class ResearchCoreTests(unittest.TestCase):
+    def test_repository_has_no_simulated_or_live_trading_modules(self):
+        root = Path(__file__).resolve().parents[1]
+        self.assertFalse((root / "execution").joinpath("trader.py").exists())
+        self.assertFalse((root / "strategy_manager").joinpath("paper.py").exists())
+        self.assertFalse((root / "strategy_manager").joinpath("runner.py").exists())
+        self.assertFalse((root / "LIVE_EXECUTION.md").exists())
+
     def test_binance_dataset_contract_is_deterministic(self):
         rules = BinanceUniverseRules()
         first = dataset_snapshot_payload(

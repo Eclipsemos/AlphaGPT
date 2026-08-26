@@ -64,6 +64,5 @@ evaluation_report.json
 training_checkpoint.pt
 walk_forward_report.json
 multi_seed_report.json
-paper_portfolio.json
 data_pipeline_status.json
 runs/
