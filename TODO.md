@@ -1,8 +1,22 @@
 # TODO
 
-The project scope is factor mining and research evaluation only. The Binance
-roadmap below intentionally excludes paper trading, Testnet, wallets, account
-APIs, order submission, and live execution.
+## Scope Lock
+
+AlphaGPT is a factor-mining and historical research tool for Binance Spot
+markets. It produces data snapshots, candidate formulas, and reproducible
+evaluation reports. It does not operate a portfolio or connect to a trading
+account.
+
+The following are permanently excluded from this roadmap: paper/simulated
+trading services, Binance Testnet/Demo, API keys and private account APIs,
+wallets, order submission, live execution, and Binance Futures in the first
+release.
+
+## Delivery Order
+
+Work in order: B1 public data -> B2 data quality -> B3 features -> B4
+historical factor evaluation -> B5 mining workflow -> B6 documentation and
+research dashboard. A later phase must not hide an incomplete earlier phase.
 
 ## Completed Research Foundation
 
@@ -60,15 +74,15 @@ APIs, order submission, and live execution.
 - [ ] Version formula vocabularies so old Solana formulas cannot be silently evaluated against Binance feature indices.
 - [ ] Add unit tests for each Binance feature and explicit no-future-data tests.
 
-## B4: Adapt Factor Scoring and Backtests
+## B4: Historical Factor Evaluation (No Trading Simulator)
 
-- [ ] Replace Solana liquidity gates and the fixed `0.6%` fee with configurable Binance Spot taker fees and conservative slippage.
+- [ ] Replace Solana liquidity gates and the fixed `0.6%` fee with configurable research cost assumptions for sensitivity analysis; do not build an order or account simulator.
 - [ ] Execute signals no earlier than the next bar open and test signal/entry/exit alignment.
-- [ ] Define portfolio construction for multi-symbol factors: ranking, maximum positions, equal/risk weights, and rebalance cadence.
-- [ ] Ensure fees are charged only on position changes and use Binance quantity/min-notional filters when estimating executable trades.
+- [ ] Define a deterministic cross-sectional evaluation protocol: ranking, maximum selected symbols, equal/risk weights, and rebalance cadence.
+- [ ] Attribute turnover and assumed costs to historical factor results; do not model order routing, balances, or execution.
 - [ ] Annualize volatility and Sharpe from the configured bar interval instead of the number of bars in the evaluation slice.
-- [ ] Add exposure, capacity, turnover, cost attribution, and per-symbol contribution to reports.
-- [ ] Add Binance baselines: equal-weight universe, BTCUSDT buy-and-hold, cross-sectional momentum, and random rank.
+- [ ] Add exposure, capacity proxy, turnover, cost attribution, and per-symbol contribution to research reports.
+- [ ] Add Binance baselines: equal-weight cross-section, BTCUSDT reference return, cross-sectional momentum, and random rank.
 - [ ] Add hand-calculated golden tests for compounding, fees, rebalances, missing symbols, and delisting exits.
 
 ## B5: Run the Binance Mining Workflow
@@ -94,10 +108,10 @@ APIs, order submission, and live execution.
 
 ## Explicitly Out of Scope
 
-- [ ] Binance API keys, account balances, or private account endpoints.
-- [ ] Binance Spot Testnet or Futures Demo integration.
-- [ ] Paper or simulated trading services.
-- [ ] Wallet integration, order creation, cancellation, or execution.
-- [ ] Binance Futures, leverage, margin, funding, or liquidation modeling in the first release.
-- [ ] Solana/Jupiter live execution.
-- [ ] Claims that a mined formula is profitable or production-ready.
+- [x] Binance API keys, account balances, or private account endpoints.
+- [x] Binance Spot Testnet or Futures Demo integration.
+- [x] Paper or simulated trading services.
+- [x] Wallet integration, order creation, cancellation, or execution.
+- [x] Binance Futures, leverage, margin, funding, or liquidation modeling in the first release.
+- [x] Solana/Jupiter live execution.
+- [x] Claims that a mined formula is profitable or production-ready.
