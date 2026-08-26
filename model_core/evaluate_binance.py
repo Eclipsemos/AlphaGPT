@@ -13,6 +13,8 @@ from .binance_evaluation import (
     BinanceFactorEvaluator,
     baseline_reports,
     cost_sensitivity_reports,
+    regime_reports,
+    robustness_reports,
 )
 from .formula_artifact import validate_formula_artifact
 from .vm import StackVM
@@ -138,6 +140,24 @@ def evaluate_artifact(
         config,
         cost_scenarios,
     )
+    regimes = regime_reports(
+        test_factors,
+        loader.test_raw_data_cache,
+        loader.test_target_ret,
+        loader.test_target_valid,
+        loader.test_signal_valid,
+        loader.symbols,
+        config,
+    )
+    robustness = robustness_reports(
+        test_factors,
+        loader.test_raw_data_cache,
+        loader.test_target_ret,
+        loader.test_target_valid,
+        loader.test_signal_valid,
+        loader.symbols,
+        config,
+    )
     report = {
         "report_version": "binance-factor-evaluation-v1",
         "market": "binance-spot",
@@ -151,6 +171,8 @@ def evaluate_artifact(
         "test_cost_sensitivity": {
             name: value.as_dict() for name, value in sensitivity.items()
         },
+        "test_regimes": regimes,
+        "test_robustness": robustness,
     }
     return report
 
@@ -168,6 +190,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--taker-fee-bps", type=float, default=10.0)
     parser.add_argument("--slippage-bps", type=float, default=5.0)
     parser.add_argument("--portfolio-notional-usd", type=float, default=100_000.0)
+    parser.add_argument("--minimum-quote-volume-usd", type=float, default=0.0)
     parser.add_argument("--cost-scenarios", type=parse_cost_scenarios, default=[0.0, 15.0, 30.0])
     return parser
 
@@ -182,6 +205,7 @@ def main() -> None:
         taker_fee_bps=args.taker_fee_bps,
         slippage_bps=args.slippage_bps,
         portfolio_notional_usd=args.portfolio_notional_usd,
+        minimum_quote_volume_usd=args.minimum_quote_volume_usd,
     )
     report = run(
         args.formula,

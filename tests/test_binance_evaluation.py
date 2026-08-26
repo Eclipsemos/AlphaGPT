@@ -8,8 +8,11 @@ from model_core.binance_evaluation import (
     BinanceEvaluationConfig,
     BinanceFactorEvaluator,
     baseline_reports,
+    causal_regime_masks,
     cost_sensitivity_reports,
     mean_rank_ic,
+    regime_reports,
+    robustness_reports,
 )
 
 
@@ -106,6 +109,65 @@ class BinanceEvaluationTests(unittest.TestCase):
         targets = torch.tensor([[0.1], [0.2], [0.3]])
         valid = torch.ones_like(factors, dtype=torch.bool)
         self.assertEqual(mean_rank_ic(factors, targets, valid), 0.0)
+
+    def test_minimum_quote_volume_filters_hourly_availability(self):
+        factors = torch.tensor([[2.0, 2.0], [1.0, 1.0]])
+        valid = torch.ones_like(factors, dtype=torch.bool)
+        raw = raw_data(2, 2)
+        raw["quote_volume"][0] = 100.0
+        evaluator = BinanceFactorEvaluator(
+            BinanceEvaluationConfig(
+                max_positions=1,
+                rebalance_hours=1,
+                minimum_quote_volume_usd=1000,
+            )
+        )
+        weights = evaluator.construct_weights(factors, raw, valid)
+        self.assertTrue(torch.equal(weights, torch.tensor([[0.0, 0.0], [1.0, 1.0]])))
+
+    def test_regime_masks_are_causal_and_robustness_matrix_is_complete(self):
+        periods = 80
+        raw = raw_data(3, periods)
+        raw["close"] = torch.stack(
+            [
+                100 + torch.arange(periods, dtype=torch.float32) * 0.1,
+                50 + torch.sin(torch.arange(periods, dtype=torch.float32) / 4),
+                20 + torch.cos(torch.arange(periods, dtype=torch.float32) / 5),
+            ]
+        )
+        valid = torch.ones((3, periods), dtype=torch.bool)
+        symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
+        first = causal_regime_masks(raw, valid, symbols)
+        changed = {key: value.clone() for key, value in raw.items()}
+        changed["close"][:, 60:] *= 10
+        second = causal_regime_masks(changed, valid, symbols)
+        for name in first:
+            self.assertTrue(torch.equal(first[name][:, :60], second[name][:, :60]))
+        target = torch.log1p(torch.full((3, periods), 0.0001))
+        factors = torch.stack([torch.ones(periods), torch.zeros(periods), -torch.ones(periods)])
+        regimes = regime_reports(factors, raw, target, valid, valid, symbols, BinanceEvaluationConfig())
+        self.assertEqual(set(regimes), {
+            "trend_up", "trend_down", "drawdown", "high_volatility", "low_volatility"
+        })
+        matrix = robustness_reports(
+            factors, raw, target, valid, valid, symbols, BinanceEvaluationConfig()
+        )
+        self.assertEqual(set(matrix), {
+            "fee_bps", "slippage_bps", "rebalance_hours", "max_positions",
+            "weighting", "minimum_quote_volume_usd",
+        })
+
+    def test_concentration_diagnostics_are_bounded(self):
+        factors = torch.tensor([[2.0] * 30, [1.0] * 30])
+        valid = torch.ones_like(factors, dtype=torch.bool)
+        target = torch.log1p(torch.full_like(factors, 0.001))
+        report = BinanceFactorEvaluator(
+            BinanceEvaluationConfig(max_positions=1, taker_fee_bps=0, slippage_bps=0)
+        ).evaluate(factors, raw_data(2, 30), target, valid, valid, ["BTCUSDT", "ETHUSDT"])
+        self.assertGreaterEqual(report.maximum_symbol_contribution_share, 0)
+        self.assertLessEqual(report.maximum_symbol_contribution_share, 1)
+        self.assertGreaterEqual(report.top_5pct_hour_contribution_share, 0)
+        self.assertLessEqual(report.top_5pct_hour_contribution_share, 1)
 
 
 if __name__ == "__main__":

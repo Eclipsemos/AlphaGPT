@@ -36,3 +36,38 @@ def canonical_formula(formula: Sequence[int], vocab: FormulaVocab) -> str:
     if len(stack) != 1:
         raise ValueError("Formula is not a single stack expression")
     return stack[0]
+
+
+def formula_complexity(formula: Sequence[int], vocab: FormulaVocab) -> dict[str, int]:
+    stack: list[int] = []
+    operators = {
+        vocab.operator_offset + index: arity
+        for index, (_, _, arity) in enumerate(OPS_CONFIG)
+    }
+    operator_count = 0
+    feature_tokens: set[int] = set()
+    maximum_depth = 0
+    for raw_token in formula:
+        token = int(raw_token)
+        if 0 <= token < vocab.feature_count:
+            stack.append(1)
+            feature_tokens.add(token)
+            maximum_depth = max(maximum_depth, 1)
+            continue
+        arity = operators.get(token)
+        if arity is None or len(stack) < arity:
+            raise ValueError("Formula is not a valid stack expression")
+        arguments = stack[-arity:]
+        del stack[-arity:]
+        depth = max(arguments) + 1
+        stack.append(depth)
+        maximum_depth = max(maximum_depth, depth)
+        operator_count += 1
+    if len(stack) != 1:
+        raise ValueError("Formula is not a single stack expression")
+    return {
+        "token_count": len(formula),
+        "operator_count": operator_count,
+        "unique_feature_count": len(feature_tokens),
+        "tree_depth": maximum_depth,
+    }

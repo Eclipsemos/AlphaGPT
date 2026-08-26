@@ -110,7 +110,9 @@ change, including a terminal exit at the evaluation boundary. They do not
 represent submitted orders, account balances, fills, or an execution engine.
 Reports include fixed-1h annualized volatility/Sharpe, drawdown, exposure,
 turnover, cost attribution, quote-volume participation as a capacity proxy,
-rank IC, and per-symbol contributions.
+rank IC, per-symbol contributions, symbol concentration, and top-hour return
+concentration. The minimum per-hour quote volume is configurable and removes a
+symbol from that hour's research universe before ranking.
 
 Evaluate a versioned formula artifact:
 
@@ -186,3 +188,22 @@ python -m model_core.binance_acceptance
 This command requires neither network access nor PostgreSQL. Its fixture is
 not research evidence; it exists only to verify that the complete workflow and
 artifact contracts function on a new machine.
+
+## Robustness And Regimes
+
+The final report varies one assumption at a time across taker fees, slippage,
+rebalance cadence, maximum positions, equal/risk weighting, and minimum hourly
+quote volume. This sensitivity matrix is diagnostic; the best scenario is not
+used to replace the declared evaluation configuration.
+
+Named regime slices use BTCUSDT information available at each signal hour:
+trailing 24-hour trend, trailing realized volatility compared with its prior
+expanding median, and drawdown from the running historical peak. Future bars
+cannot change an earlier regime label. Validation regime stability is a
+pre-test decision gate; the final report repeats the same classifications on
+the untouched test interval.
+
+Formula artifacts include token count, operator count, unique feature count,
+and tree depth. Decision gates also reject excessive tree depth and results
+whose absolute contribution is concentrated in one symbol or the largest 5%
+of evaluated hours.

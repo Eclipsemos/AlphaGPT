@@ -131,6 +131,8 @@ def verify_acceptance_artifacts(output_dir: str | Path) -> dict[str, Any]:
         "batch_version": payloads["batch"].get("report_version") == BATCH_REPORT_VERSION,
         "formula_version": payloads["formula"].get("artifact_version")
         == FORMULA_ARTIFACT_VERSION,
+        "formula_complexity": set(payloads["formula"].get("complexity", {}))
+        == {"token_count", "operator_count", "unique_feature_count", "tree_depth"},
         "evaluation_version": payloads["evaluation"].get("report_version")
         == "binance-factor-evaluation-v1",
         "decision_version": payloads["decision"].get("report_version")
@@ -150,6 +152,17 @@ def verify_acceptance_artifacts(output_dir: str | Path) -> dict[str, Any]:
             "btcusdt_reference",
             "cross_sectional_momentum",
             "random_rank",
+        },
+        "regimes_present": set(payloads["evaluation"].get("test_regimes", {}))
+        == {"trend_up", "trend_down", "drawdown", "high_volatility", "low_volatility"},
+        "robustness_present": set(payloads["evaluation"].get("test_robustness", {}))
+        == {
+            "fee_bps",
+            "slippage_bps",
+            "rebalance_hours",
+            "max_positions",
+            "weighting",
+            "minimum_quote_volume_usd",
         },
     }
     failed = [name for name, passed in checks.items() if not passed]

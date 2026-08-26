@@ -32,7 +32,15 @@ class BinanceAcceptanceTests(unittest.TestCase):
                 "batch_report.json": {"report_version": BATCH_REPORT_VERSION},
                 "candidate_aggregation.json": {},
                 "walk_forward_report.json": {"test_was_accessed": False},
-                "selected_formula.json": {"artifact_version": FORMULA_ARTIFACT_VERSION},
+                "selected_formula.json": {
+                    "artifact_version": FORMULA_ARTIFACT_VERSION,
+                    "complexity": {
+                        "token_count": 1,
+                        "operator_count": 0,
+                        "unique_feature_count": 1,
+                        "tree_depth": 1,
+                    },
+                },
                 "final_evaluation_report.json": {
                     "report_version": "binance-factor-evaluation-v1",
                     "splits": {"train": {}, "validation": {}, "test": {}},
@@ -41,6 +49,21 @@ class BinanceAcceptanceTests(unittest.TestCase):
                         "btcusdt_reference": {},
                         "cross_sectional_momentum": {},
                         "random_rank": {},
+                    },
+                    "test_regimes": {
+                        "trend_up": {},
+                        "trend_down": {},
+                        "drawdown": {},
+                        "high_volatility": {},
+                        "low_volatility": {},
+                    },
+                    "test_robustness": {
+                        "fee_bps": {},
+                        "slippage_bps": {},
+                        "rebalance_hours": {},
+                        "max_positions": {},
+                        "weighting": {},
+                        "minimum_quote_volume_usd": {},
                     },
                 },
                 "decision_report.json": {

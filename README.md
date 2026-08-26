@@ -210,6 +210,7 @@ python -m model_core.evaluate_binance \
   --rebalance-hours 24 \
   --taker-fee-bps 10 \
   --slippage-bps 5 \
+  --minimum-quote-volume-usd 1000000 \
   --cost-scenarios 0,15,30 \
   --output runs/binance/<run-id>/manual_evaluation.json
 ```

@@ -30,7 +30,7 @@ None of these artifacts authorizes or performs a trade.
 Work in order: B1 public data -> B2 data quality -> B3 features -> B4
 historical factor evaluation -> B5 mining workflow -> B6 documentation and
 research dashboard. A later phase must not hide an incomplete earlier phase.
-The current milestone is B5; B0-B4 are usable research foundations.
+The current milestone is B7 research hardening; B0-B6 are implemented.
 
 ## Completed Research Foundation
 
@@ -112,7 +112,7 @@ The current milestone is B5; B0-B4 are usable research foundations.
 - [x] Reject startup when the requested dataset snapshot, feature vocabulary, or cost model is missing or incompatible.
 - [x] Run at least five independent seeds for candidate discovery and reserve the test split until final comparison.
 - [x] Run anchored and rolling walk-forward evaluation across sequential validation windows.
-- [ ] Add named market-regime slices without choosing regimes from future data.
+- [x] Add named market-regime slices without choosing regimes from future data.
 - [x] Rank candidates by validation and walk-forward criteria, never by test performance alone.
 - [x] Generate a batch decision report with explicit `reject`, `research-only`, or `promising` status and reasons.
 - [x] Add confidence intervals and cross-seed stability statistics to the batch report.
@@ -139,22 +139,22 @@ The current milestone is B5; B0-B4 are usable research foundations.
 ## B7: Research Hardening
 
 - [x] Add experiment manifests containing CLI arguments, package versions, Git commit, CUDA/device details, and wall-clock time.
-- [ ] Add leakage checks for universe construction, normalization, rolling features, labels, candidate selection, and report aggregation.
-- [ ] Add robustness tests across fees, slippage, rebalance cadence, maximum positions, weighting, and liquidity thresholds.
-- [ ] Add regime slices for trend, drawdown, high volatility, and low volatility without selecting regimes using future data.
-- [ ] Measure formula complexity and reject unstable formulas whose results depend on a few symbols or time periods.
-- [ ] Add deterministic fixture CI that requires no Binance API key, wallet, database account, or network access.
+- [x] Add leakage checks for universe construction, normalization, rolling features, labels, candidate selection, and report aggregation.
+- [x] Add robustness tests across fees, slippage, rebalance cadence, maximum positions, weighting, and liquidity thresholds.
+- [x] Add regime slices for trend, drawdown, high volatility, and low volatility without selecting regimes using future data.
+- [x] Measure formula complexity and reject unstable formulas whose results depend on a few symbols or time periods.
+- [x] Add deterministic fixture CI that requires no Binance API key, wallet, database account, or network access.
 
 ## Definition of Done
 
 The Binance factor-research MVP is complete only when:
 
-- [ ] Public `1h` Spot data can be built into a quality-gated, immutable snapshot from one documented command.
-- [ ] A resumable five-seed mining batch produces canonical, versioned candidate formulas.
-- [ ] Validation and walk-forward selection happens before exactly one final untouched-test evaluation.
-- [ ] Results include baselines, realistic cost sensitivity, turnover, drawdown, exposure, capacity, and stability diagnostics.
-- [ ] The workflow is reproducible from a frozen fixture and documented for a new machine.
-- [ ] The dashboard contains research data only and exposes no wallet, portfolio, order, simulated-trading, or live-trading controls.
+- [x] Public `1h` Spot data can be built into a quality-gated, immutable snapshot from one documented command.
+- [x] A resumable five-seed mining batch produces canonical, versioned candidate formulas.
+- [x] Validation and walk-forward selection happens before exactly one final untouched-test evaluation.
+- [x] Results include baselines, realistic cost sensitivity, turnover, drawdown, exposure, capacity, and stability diagnostics.
+- [x] The workflow is reproducible from a frozen fixture and documented for a new machine.
+- [x] The dashboard contains research data only and exposes no wallet, portfolio, order, simulated-trading, or live-trading controls.
 
 ## Explicitly Out of Scope
 

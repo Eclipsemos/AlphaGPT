@@ -29,6 +29,12 @@ def candidate(canonical, validation, sharpe, score, seed_support=1):
         "formula": [0],
         "formula_length": 1,
         "seed_support": seed_support,
+        "complexity": {
+            "token_count": 1,
+            "operator_count": 0,
+            "unique_feature_count": 1,
+            "tree_depth": 1,
+        },
         "validation_score": {"mean": validation},
         "walk_forward": {
             "rolling": {
@@ -40,7 +46,11 @@ def candidate(canonical, validation, sharpe, score, seed_support=1):
                     "score": summary_metric(score),
                     "max_drawdown": summary_metric(-0.1),
                 }
-            }
+            },
+            "regimes": {
+                "valid_regime_count": 4,
+                "positive_sharpe_fraction": float(sharpe > 0),
+            },
         },
     }
 
@@ -52,6 +62,8 @@ def final_report(test_return=0.2, test_sharpe=1.0):
         "sharpe": test_sharpe,
         "max_drawdown": -0.1,
         "maximum_volume_participation": 0.001,
+        "maximum_symbol_contribution_share": 0.5,
+        "top_5pct_hour_contribution_share": 0.2,
     }
     baseline = {"score": 0.5}
     return {

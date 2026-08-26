@@ -26,10 +26,14 @@ import torch
 
 from .binance_data_loader import BinanceDataLoader
 from .binance_engine import BinanceAlphaEngine, BinanceMiningConfig, parse_symbols
-from .binance_evaluation import BinanceEvaluationConfig, BinanceFactorEvaluator
+from .binance_evaluation import (
+    BinanceEvaluationConfig,
+    BinanceFactorEvaluator,
+    regime_reports,
+)
 from .evaluate_binance import evaluate_artifact
 from .formula_artifact import build_formula_artifact
-from .formula_canonical import canonical_formula
+from .formula_canonical import canonical_formula, formula_complexity
 from .vm import StackVM
 from .vocab import BINANCE_FORMULA_VOCAB
 
@@ -47,6 +51,10 @@ class DecisionThresholds:
     maximum_drawdown: float = 0.5
     maximum_volume_participation: float = 0.01
     minimum_seed_support: int = 2
+    minimum_positive_regime_fraction: float = 0.5
+    maximum_formula_depth: int = 10
+    maximum_symbol_contribution_share: float = 0.75
+    maximum_top_5pct_hour_contribution_share: float = 0.60
 
     def __post_init__(self) -> None:
         if not 0 <= self.minimum_positive_rolling_fraction <= 1:
@@ -57,6 +65,14 @@ class DecisionThresholds:
             raise ValueError("maximum_volume_participation must be positive")
         if self.minimum_seed_support <= 0:
             raise ValueError("minimum_seed_support must be positive")
+        if not 0 <= self.minimum_positive_regime_fraction <= 1:
+            raise ValueError("minimum_positive_regime_fraction must be between zero and one")
+        if self.maximum_formula_depth <= 0:
+            raise ValueError("maximum_formula_depth must be positive")
+        if not 0 < self.maximum_symbol_contribution_share <= 1:
+            raise ValueError("maximum_symbol_contribution_share must be in (0, 1]")
+        if not 0 < self.maximum_top_5pct_hour_contribution_share <= 1:
+            raise ValueError("maximum_top_5pct_hour_contribution_share must be in (0, 1]")
 
 
 def parse_seeds(value: str) -> list[int]:
@@ -128,6 +144,7 @@ def aggregate_candidates(seed_candidates: Sequence[dict[str, Any]]) -> list[dict
                     "canonical_formula": canonical,
                     "formula": formula,
                     "formula_length": len(formula),
+                    "complexity": formula_complexity(formula, BINANCE_FORMULA_VOCAB),
                     "occurrences": [],
                 },
             )
@@ -261,6 +278,26 @@ def evaluate_validation_walk_forward(
                 entry["error"] = str(exc)
             reports.append(entry)
         modes[mode] = {"windows": reports, "summary": _report_summary(reports)}
+    regimes = regime_reports(
+        factors,
+        loader.validation_raw_data_cache,
+        loader.validation_target_ret,
+        loader.validation_target_valid,
+        loader.validation_signal_valid,
+        loader.symbols,
+        config,
+    )
+    valid_regimes = [value for value in regimes.values() if "metrics" in value]
+    modes["regimes"] = {
+        "reports": regimes,
+        "valid_regime_count": len(valid_regimes),
+        "positive_sharpe_fraction": (
+            sum(float(value["metrics"]["sharpe"]) > 0 for value in valid_regimes)
+            / len(valid_regimes)
+            if valid_regimes
+            else 0.0
+        ),
+    }
     return modes
 
 
@@ -272,9 +309,11 @@ def rank_walk_forward_candidates(candidates: Sequence[dict[str, Any]]) -> list[d
         complete = int(valid == expected and valid > 0)
         sharpe = rolling.get("sharpe", {})
         score = rolling.get("score", {})
+        regimes = item["walk_forward"].get("regimes", {})
         return (
             -complete,
             -float(rolling.get("positive_sharpe_fraction", 0.0)),
+            -float(regimes.get("positive_sharpe_fraction", 0.0)),
             -float(sharpe.get("median", -math.inf)),
             -float(score.get("minimum", -math.inf)),
             -float(item["validation_score"]["mean"]),
@@ -294,6 +333,7 @@ def build_decision_report(
     rolling = selected["walk_forward"]["rolling"]["summary"]
     rolling_sharpe = rolling.get("sharpe", {})
     rolling_drawdown = rolling.get("max_drawdown", {})
+    regimes = selected["walk_forward"].get("regimes", {})
     test = final_evaluation["splits"]["test"]
     baselines = final_evaluation["test_baselines"]
     sensitivity = final_evaluation["test_cost_sensitivity"]
@@ -336,6 +376,19 @@ def build_decision_report(
             thresholds.minimum_seed_support,
             int(selected["seed_support"]) >= thresholds.minimum_seed_support,
         ),
+        "regime_stability": gate(
+            float(regimes.get("positive_sharpe_fraction", 0.0)),
+            ">=",
+            thresholds.minimum_positive_regime_fraction,
+            float(regimes.get("positive_sharpe_fraction", 0.0))
+            >= thresholds.minimum_positive_regime_fraction,
+        ),
+        "formula_depth": gate(
+            int(selected["complexity"]["tree_depth"]),
+            "<=",
+            thresholds.maximum_formula_depth,
+            int(selected["complexity"]["tree_depth"]) <= thresholds.maximum_formula_depth,
+        ),
     }
     final = {
         "test_return": gate(float(test["cumulative_return"]), ">", 0.0, float(test["cumulative_return"]) > 0),
@@ -364,6 +417,20 @@ def build_decision_report(
             ">",
             comparable_baseline_score,
             float(test["score"]) > comparable_baseline_score,
+        ),
+        "symbol_concentration": gate(
+            float(test["maximum_symbol_contribution_share"]),
+            "<=",
+            thresholds.maximum_symbol_contribution_share,
+            float(test["maximum_symbol_contribution_share"])
+            <= thresholds.maximum_symbol_contribution_share,
+        ),
+        "time_concentration": gate(
+            float(test["top_5pct_hour_contribution_share"]),
+            "<=",
+            thresholds.maximum_top_5pct_hour_contribution_share,
+            float(test["top_5pct_hour_contribution_share"])
+            <= thresholds.maximum_top_5pct_hour_contribution_share,
         ),
     }
     failed_pretest = [name for name, value in pretest.items() if not value["passed"]]
@@ -577,6 +644,7 @@ def run_batch(
             selected["formula"], BINANCE_FORMULA_VOCAB, loader.research_metadata
         )
         artifact["canonical_formula"] = selected["canonical_formula"]
+        artifact["complexity"] = selected["complexity"]
         artifact["discovery"] = {
             "engine": BATCH_REPORT_VERSION,
             "seeds": selected["seeds"],
@@ -688,6 +756,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--taker-fee-bps", type=float, default=10.0)
     parser.add_argument("--slippage-bps", type=float, default=5.0)
     parser.add_argument("--portfolio-notional-usd", type=float, default=100_000.0)
+    parser.add_argument("--minimum-quote-volume-usd", type=float, default=0.0)
     parser.add_argument("--cost-scenarios", type=parse_nonnegative_floats, default=[0.0, 15.0, 30.0])
     return parser
 
@@ -710,6 +779,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 taker_fee_bps=args.taker_fee_bps,
                 slippage_bps=args.slippage_bps,
                 portfolio_notional_usd=args.portfolio_notional_usd,
+                minimum_quote_volume_usd=args.minimum_quote_volume_usd,
             ),
             window_count=args.windows,
             shortlist_size=args.shortlist_size,

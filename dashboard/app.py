@@ -137,6 +137,8 @@ with tab_runs:
                     "test": evaluation.get("splits", {}).get("test", {}),
                     "baselines": evaluation.get("test_baselines", {}),
                     "cost_sensitivity": evaluation.get("test_cost_sensitivity", {}),
+                    "regimes": evaluation.get("test_regimes", {}),
+                    "robustness": evaluation.get("test_robustness", {}),
                 }
             )
 

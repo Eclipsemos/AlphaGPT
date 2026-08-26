@@ -22,6 +22,7 @@ class BinanceEvaluationConfig:
     taker_fee_bps: float = 10.0
     slippage_bps: float = 5.0
     portfolio_notional_usd: float = 100_000.0
+    minimum_quote_volume_usd: float = 0.0
 
     def __post_init__(self) -> None:
         if self.interval != "1h":
@@ -36,6 +37,8 @@ class BinanceEvaluationConfig:
             raise ValueError("research costs cannot be negative")
         if self.portfolio_notional_usd <= 0:
             raise ValueError("portfolio_notional_usd must be positive")
+        if self.minimum_quote_volume_usd < 0:
+            raise ValueError("minimum_quote_volume_usd cannot be negative")
 
     @property
     def fee_rate(self) -> float:
@@ -66,6 +69,8 @@ class BinanceFactorReport:
     average_exposure: float
     average_active_positions: float
     maximum_volume_participation: float
+    maximum_symbol_contribution_share: float
+    top_5pct_hour_contribution_share: float
     mean_rank_ic: float
     evaluated_hours: int
     skipped_return_hours: int
@@ -146,6 +151,23 @@ class BinanceFactorEvaluator:
         )
         rank_ic = mean_rank_ic(factors, target_log_returns, return_valid & signal_valid)
         score = sharpe - 0.5 * torch.abs(max_drawdown)
+        net_by_symbol = gross_by_symbol - fee_cost_by_symbol - slippage_cost_by_symbol
+        symbol_contributions = torch.abs(net_by_symbol.sum(dim=1))
+        symbol_contribution_total = symbol_contributions.sum()
+        maximum_symbol_share = (
+            symbol_contributions.max() / symbol_contribution_total
+            if symbol_contribution_total > 1e-12
+            else torch.zeros((), device=returns.device)
+        )
+        absolute_hour_contributions = torch.abs(net_returns[activity_hours])
+        top_hour_count = max(1, math.ceil(absolute_hour_contributions.numel() * 0.05))
+        absolute_hour_total = absolute_hour_contributions.sum()
+        top_hour_share = (
+            torch.topk(absolute_hour_contributions, top_hour_count).values.sum()
+            / absolute_hour_total
+            if absolute_hour_total > 1e-12
+            else torch.zeros((), device=returns.device)
+        )
         per_symbol = tuple(
             {
                 "symbol": str(symbol),
@@ -183,6 +205,8 @@ class BinanceFactorEvaluator:
             average_exposure=float(exposure.mean().item()),
             average_active_positions=float(active_positions.mean().item()),
             maximum_volume_participation=float(participation.max().item()),
+            maximum_symbol_contribution_share=float(maximum_symbol_share.item()),
+            top_5pct_hour_contribution_share=float(top_hour_share.item()),
             mean_rank_ic=rank_ic,
             evaluated_hours=int(activity_hours.sum().item()),
             skipped_return_hours=int((~valid_return_hours).sum().item()),
@@ -203,7 +227,14 @@ class BinanceFactorEvaluator:
         )
         previous = torch.zeros(symbol_count, dtype=factors.dtype, device=factors.device)
         for index in range(time_count):
-            available = signal_valid[:, index] & torch.isfinite(factors[:, index])
+            available = (
+                signal_valid[:, index]
+                & torch.isfinite(factors[:, index])
+                & (
+                    raw_data["quote_volume"][:, index]
+                    >= self.config.minimum_quote_volume_usd
+                )
+            )
             if index % self.config.rebalance_hours == 0:
                 order = torch.argsort(factors[:, index], descending=True, stable=True)
                 selected = order[available[order]][: self.config.max_positions]
@@ -409,3 +440,159 @@ def cost_sensitivity_reports(
             symbols,
         )
     return reports
+
+
+def causal_regime_masks(
+    raw_data: dict[str, torch.Tensor],
+    signal_valid: torch.Tensor,
+    symbols: Sequence[str],
+    *,
+    lookback_hours: int = 24,
+    drawdown_threshold: float = -0.10,
+) -> dict[str, torch.Tensor]:
+    """Classify each signal hour using BTC information available at that hour."""
+    if "BTCUSDT" not in symbols:
+        raise ValueError("BTCUSDT is required for causal regime classification")
+    if lookback_hours <= 1:
+        raise ValueError("regime lookback must exceed one hour")
+    if not -1 < drawdown_threshold < 0:
+        raise ValueError("drawdown threshold must be between -1 and zero")
+    close = raw_data["close"]
+    btc_index = symbols.index("BTCUSDT")
+    btc_close = close[btc_index]
+    btc_valid = signal_valid[btc_index]
+    lagged = torch.roll(btc_close, lookback_hours)
+    lagged[:lookback_hours] = 0
+    valid_counts = torch.nn.functional.pad(
+        btc_valid.to(torch.int16), (lookback_hours, 0)
+    ).unfold(0, lookback_hours + 1, 1).sum(dim=1)
+    momentum_valid = valid_counts == lookback_hours + 1
+    momentum = torch.where(
+        momentum_valid & (btc_close > 0) & (lagged > 0),
+        torch.log(btc_close / torch.clamp(lagged, min=1e-12)),
+        torch.zeros_like(btc_close),
+    )
+    volatility = causal_realized_volatility(
+        btc_close.unsqueeze(0), btc_valid.unsqueeze(0), lookback_hours
+    ).squeeze(0)
+    high_volatility = torch.zeros_like(btc_valid)
+    low_volatility = torch.zeros_like(btc_valid)
+    for index in range(lookback_hours + 1, btc_close.numel()):
+        history = volatility[:index]
+        history = history[torch.isfinite(history)]
+        if history.numel() == 0 or not torch.isfinite(volatility[index]):
+            continue
+        threshold = history.median()
+        high_volatility[index] = volatility[index] > threshold
+        low_volatility[index] = volatility[index] <= threshold
+    positive_close = torch.where(btc_valid & (btc_close > 0), btc_close, torch.zeros_like(btc_close))
+    running_peak = torch.cummax(positive_close, dim=0).values
+    drawdown = torch.where(
+        running_peak > 0,
+        btc_close / torch.clamp(running_peak, min=1e-12) - 1,
+        torch.zeros_like(btc_close),
+    )
+    hour_masks = {
+        "trend_up": momentum_valid & (momentum > 0),
+        "trend_down": momentum_valid & (momentum <= 0),
+        "drawdown": btc_valid & (drawdown <= drawdown_threshold),
+        "high_volatility": high_volatility,
+        "low_volatility": low_volatility,
+    }
+    return {
+        name: signal_valid & mask.unsqueeze(0)
+        for name, mask in hour_masks.items()
+    }
+
+
+def regime_reports(
+    factors: torch.Tensor,
+    raw_data: dict[str, torch.Tensor],
+    target_log_returns: torch.Tensor,
+    return_valid: torch.Tensor,
+    signal_valid: torch.Tensor,
+    symbols: Sequence[str],
+    config: BinanceEvaluationConfig,
+) -> dict[str, dict[str, Any]]:
+    reports: dict[str, dict[str, Any]] = {}
+    masks = causal_regime_masks(raw_data, signal_valid, symbols)
+    evaluator = BinanceFactorEvaluator(config)
+    for name, mask in masks.items():
+        sample_hours = int(mask.any(dim=0).sum().item())
+        if sample_hours < 2:
+            reports[name] = {"sample_hours": sample_hours, "error": "insufficient regime hours"}
+            continue
+        try:
+            report = evaluator.evaluate(
+                factors,
+                raw_data,
+                target_log_returns,
+                return_valid & mask,
+                signal_valid & mask,
+                symbols,
+            )
+            reports[name] = {"sample_hours": sample_hours, "metrics": report.as_dict()}
+        except ValueError as exc:
+            reports[name] = {"sample_hours": sample_hours, "error": str(exc)}
+    return reports
+
+
+def robustness_reports(
+    factors: torch.Tensor,
+    raw_data: dict[str, torch.Tensor],
+    target_log_returns: torch.Tensor,
+    return_valid: torch.Tensor,
+    signal_valid: torch.Tensor,
+    symbols: Sequence[str],
+    config: BinanceEvaluationConfig,
+) -> dict[str, dict[str, dict[str, Any]]]:
+    """Evaluate one-factor-at-a-time research assumption sensitivity."""
+
+    def evaluate_scenarios(
+        scenarios: Sequence[tuple[str, BinanceEvaluationConfig]],
+    ) -> dict[str, dict[str, Any]]:
+        values = {}
+        for name, scenario in scenarios:
+            try:
+                values[name] = {
+                    "metrics": BinanceFactorEvaluator(scenario).evaluate(
+                        factors,
+                        raw_data,
+                        target_log_returns,
+                        return_valid,
+                        signal_valid,
+                        symbols,
+                    ).as_dict()
+                }
+            except ValueError as exc:
+                values[name] = {"error": str(exc), "config": asdict(scenario)}
+        return values
+
+    fees = sorted({0.0, float(config.taker_fee_bps), 20.0})
+    slippage = sorted({0.0, float(config.slippage_bps), 20.0})
+    rebalances = sorted({1, int(config.rebalance_hours), 24, 168})
+    positions = sorted({1, min(5, len(symbols)), min(10, len(symbols)), int(config.max_positions)})
+    liquidity = sorted({0.0, float(config.minimum_quote_volume_usd), 1_000_000.0, 10_000_000.0})
+    return {
+        "fee_bps": evaluate_scenarios(
+            [(f"{value:g}", replace(config, taker_fee_bps=value)) for value in fees]
+        ),
+        "slippage_bps": evaluate_scenarios(
+            [(f"{value:g}", replace(config, slippage_bps=value)) for value in slippage]
+        ),
+        "rebalance_hours": evaluate_scenarios(
+            [(str(value), replace(config, rebalance_hours=value)) for value in rebalances]
+        ),
+        "max_positions": evaluate_scenarios(
+            [(str(value), replace(config, max_positions=value)) for value in positions]
+        ),
+        "weighting": evaluate_scenarios(
+            [(value, replace(config, weighting=value)) for value in ("equal", "risk")]
+        ),
+        "minimum_quote_volume_usd": evaluate_scenarios(
+            [
+                (f"{value:g}", replace(config, minimum_quote_volume_usd=value))
+                for value in liquidity
+            ]
+        ),
+    }

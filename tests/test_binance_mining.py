@@ -5,7 +5,7 @@ import torch
 
 from model_core.binance_engine import BinanceAlphaEngine, BinanceMiningConfig, parse_symbols
 from model_core.binance_mining import cross_sectional_ic_score
-from model_core.formula_canonical import canonical_formula
+from model_core.formula_canonical import canonical_formula, formula_complexity
 from model_core.vocab import BINANCE_FORMULA_VOCAB
 
 
@@ -28,6 +28,15 @@ class BinanceMiningTests(unittest.TestCase):
         reversed_subtract = canonical_formula([1, 0, add + 1], BINANCE_FORMULA_VOCAB)
         self.assertEqual(first, second)
         self.assertNotEqual(subtract, reversed_subtract)
+        self.assertEqual(
+            formula_complexity([0, 1, add], BINANCE_FORMULA_VOCAB),
+            {
+                "token_count": 3,
+                "operator_count": 1,
+                "unique_feature_count": 2,
+                "tree_depth": 2,
+            },
+        )
 
     def test_mining_config_and_symbol_parser_reject_invalid_values(self):
         with self.assertRaises(ValueError):
