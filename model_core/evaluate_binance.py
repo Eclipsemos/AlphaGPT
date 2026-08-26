@@ -51,10 +51,11 @@ def run(
     output_path: str | Path,
     config: BinanceEvaluationConfig,
     cost_scenarios: Sequence[float],
+    symbols: list[str] | None = None,
 ) -> dict:
     artifact = json.loads(Path(formula_path).read_text())
     formula = validate_formula_artifact(artifact, BINANCE_FORMULA_VOCAB)
-    loader = BinanceDataLoader(snapshot_id)
+    loader = BinanceDataLoader(snapshot_id, symbols=symbols)
     loader.load_data()
     validate_research_metadata(artifact, loader)
     vm = StackVM(BINANCE_FORMULA_VOCAB)
@@ -145,6 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Evaluate a Binance factor artifact (research only)")
     parser.add_argument("--formula", required=True)
     parser.add_argument("--snapshot-id", required=True)
+    parser.add_argument("--symbols", default=None, help="Comma-separated snapshot symbol subset")
     parser.add_argument("--output", default="binance_evaluation_report.json")
     parser.add_argument("--max-positions", type=int, default=10)
     parser.add_argument("--weighting", choices=("equal", "risk"), default="equal")
@@ -174,6 +176,9 @@ def main() -> None:
         args.output,
         config,
         args.cost_scenarios,
+        [item.strip().upper() for item in args.symbols.split(",") if item.strip()]
+        if args.symbols
+        else None,
     )
     print(json.dumps(report, indent=2))
 

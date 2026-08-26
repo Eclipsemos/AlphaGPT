@@ -21,9 +21,14 @@ from .vocab import BINANCE_FORMULA_VOCAB
 
 
 class BinanceDataLoader:
-    def __init__(self, snapshot_id: str | None = None):
+    def __init__(
+        self,
+        snapshot_id: str | None = None,
+        symbols: list[str] | None = None,
+    ):
         self.engine = sqlalchemy.create_engine(ModelConfig.DB_URL)
         self.snapshot_id = snapshot_id
+        self.requested_symbols = [value.upper() for value in symbols] if symbols else None
         self.snapshot: dict[str, Any] | None = None
         self.symbols: list[str] = []
         self.times: list[datetime] = []
@@ -149,6 +154,14 @@ class BinanceDataLoader:
             raise ValueError(
                 f"Binance snapshot {resolved_snapshot_id} is missing accepted B2 quality coverage"
             )
+        if self.requested_symbols is not None:
+            requested = set(self.requested_symbols)
+            unknown = requested.difference(symbols)
+            if unknown:
+                raise ValueError(f"Symbols are not in snapshot {resolved_snapshot_id}: {sorted(unknown)}")
+            symbols = [symbol for symbol in symbols if symbol in requested]
+            if not symbols:
+                raise ValueError("Requested Binance universe is empty")
         self.snapshot_id = resolved_snapshot_id
         return payload, symbols
 
@@ -243,6 +256,7 @@ class BinanceDataLoader:
         return {
             "market": "binance-spot",
             "dataset_snapshot_id": self.snapshot_id,
+            "symbols": list(self.symbols),
             "dataset_schema_version": self.snapshot["schema_version"],
             "feature_schema_version": BINANCE_FEATURE_CODE_VERSION,
             "formula_vocab_version": BINANCE_FORMULA_VOCAB.version,
