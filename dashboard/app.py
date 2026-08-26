@@ -1,142 +1,147 @@
-import streamlit as st
+"""Streamlit dashboard for Binance factor research only."""
+
+from __future__ import annotations
+
 import pandas as pd
-import time
+import streamlit as st
+
 from data_service import DashboardService
-from visualizer import plot_pnl_distribution, plot_market_scatter
+from visualizer import plot_coverage, plot_market_scatter
+from model_core.binance_features import (
+    BINANCE_FEATURE_CODE_VERSION,
+    BINANCE_FEATURE_DEFINITIONS,
+    BINANCE_FEATURE_WARMUPS,
+)
+from model_core.vocab import BINANCE_FORMULA_VOCAB
+
 
 st.set_page_config(
-    page_title="MemeAlpha Commander",
-    page_icon="🐕",
+    page_title="AlphaGPT Binance Factor Research",
+    page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-st.markdown("""
-<style>
-    .metric-card {
-        background-color: #1E1E1E;
-        padding: 15px;
-        border-radius: 10px;
-        border: 1px solid #333;
-    }
-    .stDataFrame { border: none; }
-</style>
-""", unsafe_allow_html=True)
 
 @st.cache_resource
-def get_service():
+def get_service() -> DashboardService:
     return DashboardService()
 
+
 svc = get_service()
-
-st.sidebar.title("MemeAlpha Bot")
-st.sidebar.markdown("---")
-
-with st.sidebar:
-    st.subheader("Wallet Status")
-    bal = svc.get_wallet_balance()
-    st.metric("SOL Balance", f"{bal:.4f} SOL")
-    
-    st.markdown("---")
-    st.subheader("Control Panel")
-    if st.button("Refresh Data"):
-        st.rerun()
-        
-    if st.button("EMERGENCY STOP", type="primary"):
-        with open("STOP_SIGNAL", "w") as f:
-            f.write("STOP")
-        st.error("STOP SIGNAL SENT, Process will terminate on next cycle.")
-
-col1, col2, col3, col4 = st.columns(4)
-portfolio_df = svc.load_portfolio()
-market_df = svc.get_market_overview()
-strategy_data = svc.load_strategy_info()
-data_status = svc.get_data_status()
-pipeline_status = svc.load_pipeline_status()
-
-open_positions = len(portfolio_df)
-total_invested = portfolio_df['initial_cost_sol'].sum() if not portfolio_df.empty else 0.0
-
-with col1:
-    st.metric("Open Positions", f"{open_positions} / 5")
-with col2:
-    st.metric("Total Invested", f"{total_invested:.2f} SOL")
-with col3:
-    if not portfolio_df.empty:
-        current_val = (portfolio_df['amount_held'] * portfolio_df['highest_price']).sum()
-        pnl_sol = current_val - total_invested
-        st.metric("Unrealized PnL (Est)", f"{pnl_sol:+.3f} SOL", delta_color="normal")
-    else:
-        st.metric("Unrealized PnL", "0.00 SOL")
-with col4:
-    st.metric("Active Strategy", "AlphaGPT-v1", help=str(strategy_data))
-
+st.title("AlphaGPT · Binance Spot Factor Research")
 st.caption(
-    f"Data: {data_status['token_count']} tokens / {data_status['candle_count']} candles | "
-    f"Latest candle: {data_status['latest_candle'] or 'unknown'} | "
-    f"Snapshots: {data_status['snapshot_count']} | "
-    f"Birdeye requests: {pipeline_status.get('birdeye_requests', 'unknown')} | "
-    f"Rate limits: {pipeline_status.get('birdeye_rate_limits', 'unknown')}"
+    "只读历史研究界面：数据快照、因子特征、公式挖掘和离线评估。"
+    "不包含钱包、账户、模拟盘、订单或实盘功能。"
 )
 
-tab1, tab2, tab3, tab4 = st.tabs(["Portfolio", "Market Scanner", "Logs", "Research"])
+snapshots = svc.list_snapshots()
+if snapshots.empty:
+    st.warning("尚未找到 Binance dataset snapshot。先运行 data_pipeline.run_binance_pipeline。")
+    st.stop()
 
-with tab1:
-    st.subheader("Active Holdings")
-    if not portfolio_df.empty:
-        # Display Table
-        display_cols = ['symbol', 'entry_price', 'highest_price', 'amount_held', 'pnl_pct', 'is_moonbag']
-        
-        # Format for display
-        show_df = portfolio_df[display_cols].copy()
-        show_df['pnl_pct'] = show_df['pnl_pct'].apply(lambda x: f"{x:.2%}")
-        show_df['entry_price'] = show_df['entry_price'].apply(lambda x: f"{x:.6f}")
-        
-        st.dataframe(show_df, use_container_width=True, hide_index=True)
-        
-        # Display Chart
-        st.plotly_chart(plot_pnl_distribution(portfolio_df), use_container_width=True)
-    else:
-        st.info("No active positions. The bot is scanning...")
-
-with tab2:
-    st.subheader("Top Opportunities (DB Snapshot)")
-    if not market_df.empty:
-        st.plotly_chart(plot_market_scatter(market_df), use_container_width=True)
-        st.dataframe(market_df, use_container_width=True)
-    else:
-        st.warning("No market data found in DB. Is the Data Pipeline running?")
-
-with tab3:
-    st.subheader("System Logs (Tail 20)")
-    logs = svc.get_recent_logs(20)
-    if logs:
-        st.code("".join(logs), language="text")
-    else:
-        st.caption("No logs found or log file path incorrect.")
-
-with tab4:
-    st.subheader("Research Status")
-    history = svc.load_training_history()
-    report = svc.load_evaluation_report()
-    if history.get("step"):
-        st.metric("Training Steps", len(history["step"]))
-        history_df = pd.DataFrame({
-            "step": history.get("step", []),
-            "avg_reward": history.get("avg_reward", []),
-            "best_score": history.get("best_score", []),
-            "validation_score": history.get("validation_score", []),
-            "test_score": history.get("test_score", []),
-        }).set_index("step")
-        st.line_chart(history_df)
-    else:
-        st.info("No training history found. Run python -m model_core.engine first.")
-    if report:
-        st.json(report)
-    else:
-        st.info("No evaluation report found. Run python -m model_core.evaluate.")
-
-time.sleep(1) 
-if st.checkbox("Auto-Refresh (30s)", value=True):
-    time.sleep(30)
+snapshot_options = snapshots["snapshot_id"].tolist()
+selected_snapshot = st.sidebar.selectbox("Dataset snapshot", snapshot_options)
+st.sidebar.caption("研究范围：Binance Spot / USDT / 1h / public data")
+if st.sidebar.button("Refresh"):
+    st.cache_resource.clear()
     st.rerun()
+
+payload = svc.snapshot_payload(selected_snapshot)
+status = svc.get_data_status(selected_snapshot)
+coverage = svc.get_snapshot_coverage(selected_snapshot)
+market = svc.get_market_overview()
+runs = svc.latest_research_runs()
+
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Symbols", len(payload.get("symbols", [])))
+col2.metric("Bars in DB", f"{int(status.get('bar_count', 0)):,}")
+coverage_ratio = (
+    coverage["bar_count"].sum() / max(1, coverage["expected_bar_count"].sum())
+    if not coverage.empty
+    else None
+)
+col3.metric("Snapshot coverage", f"{coverage_ratio:.2%}" if coverage_ratio is not None else "n/a")
+col4.metric("Latest 1h bar", str(status.get("latest_bar") or "n/a"))
+
+st.info(
+    f"Snapshot `{selected_snapshot}` · {payload.get('start_time', 'n/a')} → "
+    f"{payload.get('end_time', 'n/a')} · source `{payload.get('source', 'n/a')}` · "
+    f"code `{payload.get('code_version', 'n/a')}`"
+)
+
+tab_data, tab_features, tab_runs = st.tabs(["Dataset", "Factors & Features", "Research Runs"])
+
+with tab_data:
+    st.subheader("Coverage and quality")
+    if coverage.empty:
+        st.warning("No coverage rows found for this snapshot.")
+    else:
+        st.plotly_chart(plot_coverage(coverage), use_container_width=True)
+        st.dataframe(coverage, use_container_width=True, hide_index=True)
+    st.subheader("Latest Binance market bars")
+    if market.empty:
+        st.warning("No Binance market bars found in DB.")
+    else:
+        st.plotly_chart(plot_market_scatter(market), use_container_width=True)
+        st.dataframe(market, use_container_width=True, hide_index=True)
+
+with tab_features:
+    st.subheader("Feature schema")
+    feature_metadata = {
+        "feature_schema_version": BINANCE_FEATURE_CODE_VERSION,
+        "feature_names": list(BINANCE_FORMULA_VOCAB.feature_names),
+        "feature_definitions": BINANCE_FEATURE_DEFINITIONS,
+        "feature_warmups": dict(
+            zip(BINANCE_FORMULA_VOCAB.feature_names, BINANCE_FEATURE_WARMUPS)
+        ),
+    }
+    for run in runs:
+        if run["snapshot_id"] == selected_snapshot:
+            artifacts = svc.load_run_artifacts(run["path"])
+            saved_metadata = artifacts.get("batch", {}).get("research_metadata", {})
+            if saved_metadata:
+                feature_metadata = saved_metadata
+                break
+    st.write(f"Feature version: `{feature_metadata.get('feature_schema_version', 'n/a')}`")
+    st.json(
+        {
+            "feature_names": feature_metadata.get("feature_names", []),
+            "feature_definitions": feature_metadata.get("feature_definitions", {}),
+            "feature_warmups": feature_metadata.get("feature_warmups", {}),
+            "normalization": feature_metadata.get("normalization", "available after mining"),
+        }
+    )
+
+with tab_runs:
+    st.subheader("Factor mining batches")
+    if not runs:
+        st.info("No Binance research runs found under runs/binance/.")
+    else:
+        st.dataframe(pd.DataFrame(runs), use_container_width=True, hide_index=True)
+        choices = [run["path"] for run in runs]
+        selected_run = st.selectbox("Run artifact", choices)
+        artifacts = svc.load_run_artifacts(selected_run)
+        decision = artifacts.get("decision", {})
+        if decision:
+            status_label = decision.get("status", "unknown").upper()
+            st.metric("Research decision", status_label)
+            st.caption(decision.get("disclaimer", ""))
+            st.json(decision)
+        evaluation = artifacts.get("evaluation", {})
+        if evaluation:
+            st.subheader("Final test report (selected formula only)")
+            st.json(
+                {
+                    "formula": evaluation.get("formula"),
+                    "test": evaluation.get("splits", {}).get("test", {}),
+                    "baselines": evaluation.get("test_baselines", {}),
+                    "cost_sensitivity": evaluation.get("test_cost_sensitivity", {}),
+                }
+            )
+
+st.divider()
+st.caption(
+    "研究状态不是盈利或生产可用性承诺。所有成本、权重和收益数字仅用于历史统计；"
+    "AlphaGPT 不提交订单、不维护虚拟余额，也不连接 Binance 私有 API。"
+)

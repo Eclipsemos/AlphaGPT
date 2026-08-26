@@ -21,7 +21,7 @@ sqlalchemy>=2.0.0     # Database ORM (PostgreSQL)
 asyncpg>=0.28.0       # Async PostgreSQL driver
 
 # Async HTTP & Network
-aiohttp>=3.9.0        # Async HTTP client (for Birdeye/Jupiter APIs)
+aiohttp>=3.9.0        # Async HTTP client for public Binance market data
 
 # Environment & Configuration
 python-dotenv>=1.0.0  # Load .env files
@@ -29,12 +29,6 @@ python-dotenv>=1.0.0  # Load .env files
 # Logging & Progress
 loguru>=0.7.0         # Structured logging
 tqdm>=4.66.0          # Progress bars
-
-# Solana Blockchain Integration
-# Note: Install solders first, then solana (as recommended by solana-py)
-solders>=0.18.0       # Solana Rust bindings (install first)
-solana>=0.30.0        # Solana Python SDK
-base58>=2.1.0         # Base58 encoding for Solana addresses
 
 # Dashboard & Visualization
 streamlit>=1.28.0     # Web dashboard framework

@@ -128,13 +128,13 @@ The current milestone is B5; B0-B4 are usable research foundations.
 
 ## B6: Documentation and Dashboard
 
-- [ ] Rewrite setup documentation for the Binance public-data research workflow; no API key should be required for the MVP.
-- [ ] Document dataset provenance, supported interval, universe rules, costs, feature vocabulary, and known biases.
-- [ ] Update the dashboard to select a market/dataset snapshot and show Binance symbols instead of Solana addresses.
-- [ ] Show dataset coverage, gaps, freshness, feature version, cost assumptions, and baseline comparisons.
-- [ ] Remove or hide wallet, SOL balance, Birdeye status, portfolio, and execution controls from the research dashboard.
+- [x] Rewrite setup documentation for the Binance public-data research workflow; no API key should be required for the MVP.
+- [x] Document dataset provenance, supported interval, universe rules, costs, feature vocabulary, and known biases.
+- [x] Update the dashboard to select a Binance dataset snapshot and show symbols instead of Solana addresses.
+- [x] Show dataset coverage, gaps, freshness, feature version, cost assumptions, and baseline comparisons.
+- [x] Remove wallet, SOL balance, Birdeye status, portfolio, and execution controls from the research dashboard.
 - [ ] Add an end-to-end acceptance command: build fixture dataset, mine a short batch, evaluate, and verify report schema.
-- [ ] Document the exact boundary between historical factor evaluation and prohibited simulated/live trading.
+- [x] Document the exact boundary between historical factor evaluation and prohibited simulated/live trading.
 
 ## B7: Research Hardening
 

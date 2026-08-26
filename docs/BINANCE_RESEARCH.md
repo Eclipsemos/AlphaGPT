@@ -129,3 +129,47 @@ The report always includes equal-weight cross-section, BTCUSDT reference,
 cross-sectional momentum, and seeded random-rank baselines, plus configurable
 cost-sensitivity scenarios. These are historical research statistics, not a
 claim of future profitability or production readiness.
+
+## Multi-Seed Mining And Selection
+
+Run the full research workflow with five independent discovery seeds:
+
+```bash
+python -m model_core.binance_batch \
+  --snapshot-id <snapshot-id> \
+  --seeds 1,2,3,4,5 \
+  --steps 1000 \
+  --batch-size 8192 \
+  --windows 4
+```
+
+The miner rewards formulas with train-split cross-sectional IC. Each seed may
+send a bounded candidate pool to validation; canonical RPN representations
+merge commutative equivalents such as `A + B` and `B + A`. Shortlisting uses
+validation IC and final selection uses anchored and disjoint rolling windows
+within validation. No selection function receives a test tensor.
+
+After the selected formula artifact is written, the workflow performs one
+final test evaluation and compares it with fixed baselines and cost scenarios.
+The decision report uses three statuses:
+
+- `reject`: at least one validation or walk-forward pre-test gate failed.
+- `research-only`: pre-test gates passed but at least one final gate failed.
+- `promising`: all configured gates passed; still not a profitability claim.
+
+A positive test return alone cannot produce `promising`. Cross-seed support,
+validation IC, rolling-window stability, drawdown, baseline score, assumed
+costs, and the quote-volume capacity proxy are independently recorded gates.
+
+The experiment manifest records the exact command, Git revision and dirty
+state, Python/package versions, CUDA/device details, and elapsed time. Resume
+accepts only artifacts with identical snapshot metadata, universe, seed, and
+mining configuration.
+
+## Research Boundary
+
+Historical factor evaluation computes hypothetical weights, turnover, costs,
+and returns so formulas can be compared on the same data. Those arrays are not
+an account model: they do not persist cash, balances, positions, fills, or
+orders. AlphaGPT does not connect to a private Binance endpoint and does not
+provide a simulated or live trading service.

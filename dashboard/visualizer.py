@@ -1,40 +1,39 @@
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import pandas as pd
 
-def plot_pnl_distribution(portfolio_df):
-    if portfolio_df.empty:
+
+def plot_market_scatter(market_df: pd.DataFrame):
+    if market_df.empty:
         return go.Figure()
-    
-    colors = ['#00FF00' if x > 0 else '#FF0000' for x in portfolio_df['pnl_pct']]
-    
-    fig = go.Figure(data=[go.Bar(
-        x=portfolio_df['symbol'],
-        y=portfolio_df['pnl_pct'],
-        marker_color=colors
-    )])
-    
-    fig.update_layout(
-        title="Current Positions PnL %",
-        yaxis_tickformat='.2%',
-        template="plotly_dark",
-        margin=dict(l=20, r=20, t=40, b=20)
-    )
-    return fig
-
-def plot_market_scatter(market_df):
-    if market_df.empty: return go.Figure()
-    
-    fig = px.scatter(
-        market_df,
-        x="liquidity",
-        y="volume",
-        size="fdv",
+    frame = market_df.copy()
+    frame["quote_volume"] = frame["quote_volume"].clip(lower=1)
+    frame["close"] = frame["close"].clip(lower=1e-12)
+    return px.scatter(
+        frame,
+        x="quote_volume",
+        y="close",
+        size="trade_count",
         color="symbol",
         hover_name="symbol",
         log_x=True,
         log_y=True,
-        title="Market Liquidity vs Volume (Bubble Size = FDV)",
-        template="plotly_dark"
+        title="Binance Spot: latest quote volume vs close",
+        template="plotly_dark",
     )
-    return fig
+
+
+def plot_coverage(coverage_df: pd.DataFrame):
+    if coverage_df.empty:
+        return go.Figure()
+    frame = coverage_df.copy()
+    frame["coverage"] = frame["bar_count"] / frame["expected_bar_count"].clip(lower=1)
+    return px.bar(
+        frame,
+        x="symbol",
+        y="coverage",
+        title="Snapshot bar coverage",
+        labels={"coverage": "coverage ratio"},
+        range_y=[0, 1.05],
+        template="plotly_dark",
+    )
