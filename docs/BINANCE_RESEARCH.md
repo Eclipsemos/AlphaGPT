@@ -47,6 +47,18 @@ Build or resume the canonical dataset:
 python -m data_pipeline.run_binance_pipeline
 ```
 
+Use verified monthly archives for the complete calendar months and public REST
+for the leading/trailing partial months:
+
+```bash
+python -m data_pipeline.run_binance_pipeline --source archive
+```
+
+Every downloaded ZIP is checked against its official `.CHECKSUM` SHA-256 before
+parsing. Verification failure aborts the snapshot; it is never silently
+accepted or replaced. Archive URLs, individual checksums, and a deterministic
+aggregate checksum are stored in snapshot coverage metadata.
+
 The command writes `runs/binance_latest/dataset_report.json`. A rerun resumes
 after the latest stored bar for each symbol, while primary-key upserts make
 overlapping responses idempotent.

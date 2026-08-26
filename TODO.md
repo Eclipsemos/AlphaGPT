@@ -45,8 +45,8 @@ research dashboard. A later phase must not hide an incomplete earlier phase.
 ## B1: Build the Binance Public-Data Pipeline
 
 - [x] Add a read-only Binance Spot provider for `exchangeInfo`, `ticker/24hr`, and paginated `klines`.
-- [ ] Reuse the timestamp normalization, retry, pacing, and integrity-check patterns from `mmtick` without importing its trading code.
-- [ ] Add optional ingestion from `data.binance.vision` with SHA-256 verification for reproducible bulk history.
+- [x] Reuse the timestamp normalization, retry, pacing, and integrity-check patterns from `mmtick` without importing its trading code.
+- [x] Add optional ingestion from `data.binance.vision` with SHA-256 verification for reproducible bulk history.
 - [x] Normalize Binance timestamps to UTC and handle both millisecond and microsecond archive timestamps.
 - [x] Store Binance instruments and bars in new tables; do not overload Solana `address`, `liquidity`, or `fdv` fields.
 - [x] Make REST ingestion idempotent and safe to resume after interruption.

@@ -26,6 +26,10 @@ class Config:
     CONCURRENCY = 20
     HISTORY_DAYS = 30
     BINANCE_BASE_URL = os.getenv("BINANCE_BASE_URL", "https://data-api.binance.vision")
+    BINANCE_ARCHIVE_BASE_URL = os.getenv(
+        "BINANCE_ARCHIVE_BASE_URL",
+        "https://data.binance.vision/data/spot/monthly/klines",
+    )
     BINANCE_RULES = BinanceUniverseRules(
         history_days=int(os.getenv("BINANCE_HISTORY_DAYS", "365")),
         max_symbols=int(os.getenv("BINANCE_MAX_SYMBOLS", "50")),

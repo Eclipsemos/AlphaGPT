@@ -1,9 +1,20 @@
 import asyncio
+import hashlib
+import io
 import unittest
+import zipfile
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from data_pipeline.binance_contracts import BinanceBar, BinanceInstrument, BinanceUniverseRules
+from data_pipeline.binance_archive import (
+    BinanceArchiveError,
+    BinanceSpotArchiveProvider,
+    aggregate_archive_checksum,
+    iter_complete_months,
+    missing_bar_ranges,
+    parse_archive_zip,
+)
 from data_pipeline.db_manager import DBManager
 from data_pipeline.providers.binance_spot import (
     BinanceSpotProvider,
@@ -31,7 +42,10 @@ class FakeResponse:
         return self._payload
 
     async def text(self):
-        return str(self._payload)
+        return self._payload if isinstance(self._payload, str) else str(self._payload)
+
+    async def read(self):
+        return self._payload if isinstance(self._payload, bytes) else str(self._payload).encode()
 
 
 class FakeSession:
@@ -138,6 +152,13 @@ def kline(open_time, *, close_time=None, close="101"):
     ]
 
 
+def archive_bytes(rows):
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("BTCUSDT-1h-2026-01.csv", "\n".join(",".join(map(str, row)) for row in rows))
+    return output.getvalue()
+
+
 class BinanceProviderTests(unittest.IsolatedAsyncioTestCase):
     def test_timestamp_parser_accepts_milliseconds_and_microseconds(self):
         expected = datetime(2025, 1, 1, tzinfo=UTC)
@@ -227,6 +248,64 @@ class BinanceProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(provider.request_count, 2)
         self.assertEqual(provider.rate_limit_count, 1)
         self.assertEqual(clock.sleeps, [2.0])
+
+
+class BinanceArchiveTests(unittest.IsolatedAsyncioTestCase):
+    def test_complete_month_selection_and_gap_ranges(self):
+        start = datetime(2025, 12, 15, tzinfo=UTC)
+        end = datetime(2026, 3, 2, tzinfo=UTC)
+        self.assertEqual(list(iter_complete_months(start, end)), [(2026, 1), (2026, 2)])
+        bars = [
+            parse_kline("BTCUSDT", "1h", kline(start), "fixture"),
+            parse_kline("BTCUSDT", "1h", kline(start + timedelta(hours=2)), "fixture"),
+        ]
+        self.assertEqual(
+            missing_bar_ranges(bars, start, start + timedelta(hours=4)),
+            [
+                (start + timedelta(hours=1), start + timedelta(hours=2)),
+                (start + timedelta(hours=3), start + timedelta(hours=4)),
+            ],
+        )
+
+    def test_archive_parser_accepts_microsecond_timestamps(self):
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        row = kline(start)
+        row[0] *= 1000
+        row[6] *= 1000
+        bars = parse_archive_zip("BTCUSDT", "1h", archive_bytes([row]), "fixture")
+        self.assertEqual(len(bars), 1)
+        self.assertEqual(bars[0].open_time, start)
+
+    async def test_archive_download_verifies_official_checksum(self):
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        content = archive_bytes([kline(start)])
+        checksum = hashlib.sha256(content).hexdigest()
+        session = FakeSession([
+            FakeResponse(200, f"{checksum}  BTCUSDT-1h-2026-01.zip"),
+            FakeResponse(200, content),
+        ])
+        async with BinanceSpotArchiveProvider(session=session) as provider:
+            bars, metadata = await provider.monthly_bars(
+                "BTCUSDT", "1h", start, datetime(2026, 2, 1, tzinfo=UTC)
+            )
+        self.assertEqual(len(bars), 1)
+        self.assertEqual(metadata[0]["archive_checksum"], checksum)
+        self.assertEqual(aggregate_archive_checksum(metadata), hashlib.sha256(
+            f"BTCUSDT-1h-2026-01.zip:{checksum}".encode("ascii")
+        ).hexdigest())
+
+    async def test_archive_checksum_mismatch_is_fatal(self):
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        content = archive_bytes([kline(start)])
+        session = FakeSession([
+            FakeResponse(200, f"{'0' * 64}  BTCUSDT-1h-2026-01.zip"),
+            FakeResponse(200, content),
+        ])
+        async with BinanceSpotArchiveProvider(session=session) as provider:
+            with self.assertRaises(BinanceArchiveError):
+                await provider.monthly_bars(
+                    "BTCUSDT", "1h", start, datetime(2026, 2, 1, tzinfo=UTC)
+                )
 
 
 class BinanceDBTests(unittest.IsolatedAsyncioTestCase):

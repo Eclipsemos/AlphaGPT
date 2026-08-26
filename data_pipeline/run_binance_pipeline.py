@@ -18,6 +18,11 @@ from pathlib import Path
 from loguru import logger
 
 from .binance_contracts import dataset_snapshot_id, dataset_snapshot_payload
+from .binance_archive import (
+    BinanceSpotArchiveProvider,
+    aggregate_archive_checksum,
+    missing_bar_ranges,
+)
 from .config import Config
 from .db_manager import DBManager
 from .providers.binance_spot import BinanceSpotProvider
@@ -31,6 +36,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-symbols", type=int, default=None)
     parser.add_argument("--candidate-multiplier", type=int, default=2)
     parser.add_argument("--base-url", default=Config.BINANCE_BASE_URL)
+    parser.add_argument(
+        "--source",
+        choices=("rest", "archive"),
+        default="rest",
+        help="Bar source: public REST or verified data.binance.vision monthly archives",
+    )
+    parser.add_argument("--archive-base-url", default=Config.BINANCE_ARCHIVE_BASE_URL)
     parser.add_argument("--output", type=Path, default=Path("runs/binance_latest/dataset_report.json"))
     parser.add_argument("--code-version", default=None)
     parser.add_argument("--dry-run", action="store_true", help="Discover and report symbols without downloading bars")
@@ -104,61 +116,14 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
                 symbols,
                 start_time,
                 end_time,
-                source=provider.source_name,
+                source=("binance-spot-archive+rest" if args.source == "archive" else provider.source_name),
                 code_version=args.code_version or current_code_version(),
             )
             snapshot_id = dataset_snapshot_id(canonical)
             retrieved_at = datetime.now(UTC)
             coverage: list[dict[str, object]] = []
             downloaded_bars = 0
-            if not args.dry_run:
-                for index, instrument in enumerate(instruments, start=1):
-                    latest = await db.latest_market_bar_time(
-                        instrument.symbol,
-                        rules.interval,
-                        before=end_time,
-                    )
-                    fetch_start = start_time
-                    if latest is not None:
-                        fetch_start = max(start_time, latest.astimezone(UTC) + timedelta(hours=1))
-                    logger.info(
-                        "Fetching {}/{}: {} from {}",
-                        index,
-                        len(instruments),
-                        instrument.symbol,
-                        fetch_start.isoformat(),
-                    )
-                    bars = (
-                        await provider.klines(instrument.symbol, rules.interval, fetch_start, end_time)
-                        if fetch_start < end_time
-                        else []
-                    )
-                    await db.upsert_market_bars(bars)
-                    downloaded_bars += len(bars)
-                    stored = await db.market_bar_coverage(
-                        instrument.symbol,
-                        rules.interval,
-                        start_time,
-                        end_time,
-                    )
-                    coverage.append(
-                        {
-                            "symbol": instrument.symbol,
-                            "requested_start_time": start_time,
-                            "requested_end_time": end_time,
-                            "response_start_time": stored["response_start_time"],
-                            "response_end_time": stored["response_end_time"],
-                            "bar_count": stored["bar_count"],
-                            "expected_bar_count": expected_bar_count,
-                            "archive_checksum": None,
-                            "source_metadata": {
-                                "provider": provider.source_name,
-                                "provider_status": provider.status,
-                            },
-                            "retrieved_at": retrieved_at,
-                        }
-                    )
-            else:
+            if args.dry_run:
                 coverage = [
                     {
                         "symbol": instrument.symbol,
@@ -174,6 +139,83 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
                     }
                     for instrument in instruments
                 ]
+            else:
+                archive_provider = None
+                if args.source == "archive":
+                    archive_provider = BinanceSpotArchiveProvider(args.archive_base_url)
+                    await archive_provider.__aenter__()
+                try:
+                    for index, instrument in enumerate(instruments, start=1):
+                        latest = await db.latest_market_bar_time(
+                            instrument.symbol,
+                            rules.interval,
+                            before=end_time,
+                        )
+                        fetch_start = start_time
+                        if latest is not None:
+                            fetch_start = max(start_time, latest.astimezone(UTC) + timedelta(hours=1))
+                        logger.info(
+                            "Fetching {}/{}: {} from {}",
+                            index,
+                            len(instruments),
+                            instrument.symbol,
+                            fetch_start.isoformat(),
+                        )
+                        archive_metadata: list[dict[str, object]] = []
+                        if args.source == "archive" and fetch_start < end_time:
+                            archive_bars, archive_metadata = await archive_provider.monthly_bars(
+                                instrument.symbol, rules.interval, fetch_start, end_time
+                            )
+                            bars_by_time = {bar.open_time: bar for bar in archive_bars}
+                            for gap_start, gap_end in missing_bar_ranges(
+                                archive_bars, fetch_start, end_time
+                            ):
+                                rest_bars = await provider.klines(
+                                    instrument.symbol, rules.interval, gap_start, gap_end
+                                )
+                                bars_by_time.update({bar.open_time: bar for bar in rest_bars})
+                            bars = [bars_by_time[key] for key in sorted(bars_by_time)]
+                        elif args.source == "archive":
+                            bars = []
+                        else:
+                            bars = (
+                                await provider.klines(instrument.symbol, rules.interval, fetch_start, end_time)
+                                if fetch_start < end_time
+                                else []
+                            )
+                        await db.upsert_market_bars(bars)
+                        downloaded_bars += len(bars)
+                        stored = await db.market_bar_coverage(
+                            instrument.symbol,
+                            rules.interval,
+                            start_time,
+                            end_time,
+                        )
+                        coverage.append(
+                            {
+                                "symbol": instrument.symbol,
+                                "requested_start_time": start_time,
+                                "requested_end_time": end_time,
+                                "response_start_time": stored["response_start_time"],
+                                "response_end_time": stored["response_end_time"],
+                                "bar_count": stored["bar_count"],
+                                "expected_bar_count": expected_bar_count,
+                                "archive_checksum": aggregate_archive_checksum(archive_metadata),
+                                "source_metadata": {
+                                    "provider": (
+                                        provider.source_name
+                                        if args.source == "rest"
+                                        else "binance-spot-archive+rest"
+                                    ),
+                                    "provider_status": provider.status,
+                                    "archives": archive_metadata,
+                                },
+                                "retrieved_at": retrieved_at,
+                            }
+                        )
+                finally:
+                    if archive_provider is not None:
+                        await archive_provider.__aexit__(None, None, None)
             if not args.dry_run:
                 await db.create_dataset_snapshot(
                     snapshot_id,
