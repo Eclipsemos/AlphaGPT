@@ -3,7 +3,7 @@ import math
 
 import torch
 
-from model_core.binance_features import BinanceFeatureEngineer
+from model_core.binance_features import BINANCE_FEATURE_DEFINITIONS, BinanceFeatureEngineer
 from model_core.formula_artifact import build_formula_artifact, validate_formula_artifact
 from model_core.vocab import BINANCE_FORMULA_VOCAB, FORMULA_VOCAB
 from model_core.vm import StackVM
@@ -37,6 +37,7 @@ class BinanceFeatureTests(unittest.TestCase):
         self.assertFalse(result.valid[0, 4, 23])
         self.assertTrue(result.valid[0, 4, 24])
         self.assertTrue(torch.isfinite(result.values).all())
+        self.assertEqual(tuple(BINANCE_FEATURE_DEFINITIONS), result.normalization.feature_names)
 
     def test_missing_bar_invalidates_rolling_features_without_fill(self):
         raw, observed = feature_input()

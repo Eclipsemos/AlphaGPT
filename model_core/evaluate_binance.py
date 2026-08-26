@@ -34,10 +34,13 @@ def validate_research_metadata(artifact: dict, loader: BinanceDataLoader) -> Non
     for key in (
         "market",
         "dataset_snapshot_id",
+        "symbols",
         "dataset_schema_version",
+        "dataset_code_version",
         "feature_schema_version",
         "formula_vocab_version",
         "feature_names",
+        "feature_definitions",
         "feature_warmups",
         "normalization",
     ):

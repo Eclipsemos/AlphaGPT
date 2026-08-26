@@ -107,23 +107,24 @@ The current milestone is B5; B0-B4 are usable research foundations.
 - [x] Save checkpoints and RNG state so an interrupted CUDA run can resume reproducibly.
 - [x] Deduplicate commutative and otherwise canonical-equivalent formulas before candidate aggregation.
 - [x] Run smoke mining on a small Binance universe and verify that the test split is not accessed.
-- [ ] Add `--market binance-spot`, dataset snapshot, interval, and universe options to research commands.
-- [ ] Keep Solana and Binance run directories and report metadata explicitly separated.
-- [ ] Reject startup when the requested dataset snapshot, feature vocabulary, or cost model is missing or incompatible.
-- [ ] Run at least five independent seeds for candidate discovery and reserve the test split until final comparison.
-- [ ] Run anchored and rolling walk-forward evaluation across multiple market regimes.
-- [ ] Rank candidates by validation and walk-forward criteria, never by test performance alone.
-- [ ] Generate a batch decision report with explicit `reject`, `research-only`, or `promising` status and reasons.
-- [ ] Add confidence intervals and cross-seed stability statistics to the batch report.
-- [ ] Add a one-command Binance batch workflow: snapshot validation, mining, aggregation, walk-forward evaluation, and final report.
+- [x] Add `--market binance-spot`, dataset snapshot, interval, and universe options to research commands.
+- [x] Keep Solana and Binance run directories and report metadata explicitly separated.
+- [x] Reject startup when the requested dataset snapshot, feature vocabulary, or cost model is missing or incompatible.
+- [x] Run at least five independent seeds for candidate discovery and reserve the test split until final comparison.
+- [x] Run anchored and rolling walk-forward evaluation across sequential validation windows.
+- [ ] Add named market-regime slices without choosing regimes from future data.
+- [x] Rank candidates by validation and walk-forward criteria, never by test performance alone.
+- [x] Generate a batch decision report with explicit `reject`, `research-only`, or `promising` status and reasons.
+- [x] Add confidence intervals and cross-seed stability statistics to the batch report.
+- [x] Add a one-command Binance batch workflow: snapshot validation, mining, aggregation, walk-forward evaluation, and final report.
 
 ### B5 Acceptance Gate
 
-- [ ] A five-seed fixture batch completes from one command and can resume after interruption.
-- [ ] Re-running the same snapshot and seeds reproduces candidate identities and materially identical metrics.
-- [ ] Candidate selection code cannot read test tensors before the final evaluation stage.
-- [ ] The report rejects candidates that fail validation, regime stability, baseline, cost, or capacity criteria.
-- [ ] A positive test return alone can never produce `promising` status.
+- [x] A five-seed fixture batch completes from one command and can resume after interruption.
+- [x] Re-running the same snapshot and seeds reproduces candidate identities and materially identical metrics.
+- [x] Candidate selection code cannot read test tensors before the final evaluation stage.
+- [x] The report rejects candidates that fail validation, window stability, baseline, cost, or capacity criteria.
+- [x] A positive test return alone can never produce `promising` status.
 
 ## B6: Documentation and Dashboard
 
@@ -137,7 +138,7 @@ The current milestone is B5; B0-B4 are usable research foundations.
 
 ## B7: Research Hardening
 
-- [ ] Add experiment manifests containing CLI arguments, package versions, Git commit, CUDA/device details, and wall-clock time.
+- [x] Add experiment manifests containing CLI arguments, package versions, Git commit, CUDA/device details, and wall-clock time.
 - [ ] Add leakage checks for universe construction, normalization, rolling features, labels, candidate selection, and report aggregation.
 - [ ] Add robustness tests across fees, slippage, rebalance cadence, maximum positions, weighting, and liquidity thresholds.
 - [ ] Add regime slices for trend, drawdown, high volatility, and low volatility without selecting regimes using future data.

@@ -12,6 +12,19 @@ from .vocab import BINANCE_FEATURE_NAMES
 
 BINANCE_FEATURE_CODE_VERSION = "binance-features-v1"
 BINANCE_FEATURE_WARMUPS = (1, 0, 14, 0, 24, 24, 0, 0, 1, 0, 0)
+BINANCE_FEATURE_DEFINITIONS = {
+    "RET_1H": "log(close[t] / close[t-1])",
+    "RANGE": "(high[t] - low[t]) / close[t-1]",
+    "ATR_14": "mean_14(true_range[t] / close[t-1])",
+    "CLOSE_POSITION": "(close[t] - low[t]) / (high[t] - low[t])",
+    "MOMENTUM_24H": "log(close[t] / close[t-24])",
+    "REALIZED_VOL_24H": "sqrt(mean_24(RET_1H[t]^2))",
+    "LOG_BASE_VOLUME": "log1p(base_volume[t])",
+    "LOG_QUOTE_VOLUME": "log1p(quote_volume[t])",
+    "QUOTE_VOLUME_CHANGE": "log1p(quote_volume[t]) - log1p(quote_volume[t-1])",
+    "LOG_TRADE_COUNT": "log1p(trade_count[t])",
+    "TAKER_BUY_IMBALANCE": "2 * taker_buy_quote_volume[t] / quote_volume[t] - 1",
+}
 
 
 @dataclass(frozen=True)

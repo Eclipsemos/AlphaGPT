@@ -12,6 +12,7 @@ import torch
 
 from .binance_features import (
     BINANCE_FEATURE_CODE_VERSION,
+    BINANCE_FEATURE_DEFINITIONS,
     BINANCE_FEATURE_WARMUPS,
     BinanceFeatureEngineer,
 )
@@ -258,9 +259,11 @@ class BinanceDataLoader:
             "dataset_snapshot_id": self.snapshot_id,
             "symbols": list(self.symbols),
             "dataset_schema_version": self.snapshot["schema_version"],
+            "dataset_code_version": self.snapshot["code_version"],
             "feature_schema_version": BINANCE_FEATURE_CODE_VERSION,
             "formula_vocab_version": BINANCE_FORMULA_VOCAB.version,
             "feature_names": list(BINANCE_FORMULA_VOCAB.feature_names),
+            "feature_definitions": BINANCE_FEATURE_DEFINITIONS,
             "feature_warmups": dict(zip(BINANCE_FORMULA_VOCAB.feature_names, BINANCE_FEATURE_WARMUPS)),
             "normalization": self.feature_normalization,
         }

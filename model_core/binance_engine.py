@@ -296,6 +296,12 @@ class BinanceAlphaEngine:
             "validation_score": best["validation_score"],
             "test_was_accessed": False,
         }
+        artifact["discovery"] = {
+            "engine": "binance-alpha-engine-v1",
+            "seed": self.seed,
+            "mining_config": asdict(self.config),
+            "canonical_formula": best["canonical_formula"],
+        }
         formula_path = self.output_dir / "best_formula.json"
         candidates_path = self.output_dir / "candidates.json"
         history_path = self.output_dir / "training_history.json"
@@ -305,6 +311,8 @@ class BinanceAlphaEngine:
             json.dumps(
                 {
                     "research_metadata": self.loader.research_metadata,
+                    "seed": self.seed,
+                    "mining_config": asdict(self.config),
                     "selection_criterion": "validation_ic_score",
                     "test_was_accessed": False,
                     "candidates": ranked,
