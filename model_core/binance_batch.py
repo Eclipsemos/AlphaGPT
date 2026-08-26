@@ -27,7 +27,7 @@ import torch
 from .binance_data_loader import BinanceDataLoader
 from .binance_engine import BinanceAlphaEngine, BinanceMiningConfig, parse_symbols
 from .binance_evaluation import BinanceEvaluationConfig, BinanceFactorEvaluator
-from .evaluate_binance import run as run_final_evaluation
+from .evaluate_binance import evaluate_artifact
 from .formula_artifact import build_formula_artifact
 from .formula_canonical import canonical_formula
 from .vm import StackVM
@@ -458,6 +458,7 @@ def run_batch(
     thresholds: DecisionThresholds | None = None,
     resume: bool = False,
     use_lord_regularization: bool = True,
+    loader_override: Any | None = None,
 ) -> dict[str, Any]:
     if not seeds or len(set(seeds)) != len(seeds):
         raise ValueError("Batch seeds must be non-empty and unique")
@@ -472,8 +473,13 @@ def run_batch(
     destination.mkdir(parents=True, exist_ok=True)
     started_at = datetime.now(timezone.utc)
     monotonic_start = time.monotonic()
-    loader = BinanceDataLoader(snapshot_id, symbols=symbols)
-    loader.load_data()
+    loader = loader_override or BinanceDataLoader(snapshot_id, symbols=symbols)
+    if getattr(loader, "feat_tensor", None) is None:
+        loader.load_data()
+    if loader.snapshot_id != snapshot_id:
+        raise ValueError("Batch loader does not match the requested snapshot")
+    if symbols is not None and list(loader.symbols) != [item.upper() for item in symbols]:
+        raise ValueError("Batch loader does not match the requested symbols")
     if len(loader.symbols) < 2:
         raise ValueError("Binance batch research requires at least two symbols")
     if "BTCUSDT" not in loader.symbols:
@@ -517,6 +523,7 @@ def run_batch(
                     output_dir=seed_dir,
                     config=mining_config,
                     use_lord_regularization=use_lord_regularization,
+                    loader=loader,
                 )
                 resumed = resume and engine.checkpoint_path.is_file()
                 engine.train(resume=resumed)
@@ -586,14 +593,13 @@ def run_batch(
         write_json(selected_path, artifact)
 
         final_path = destination / "final_evaluation_report.json"
-        final_evaluation = run_final_evaluation(
-            selected_path,
-            loader.snapshot_id,
-            final_path,
+        final_evaluation = evaluate_artifact(
+            artifact,
+            loader,
             evaluation_config,
             cost_scenarios,
-            loader.symbols,
         )
+        write_json(final_path, final_evaluation)
         decision = build_decision_report(selected, final_evaluation, thresholds)
         write_json(destination / "decision_report.json", decision)
         seed_winner_scores = [

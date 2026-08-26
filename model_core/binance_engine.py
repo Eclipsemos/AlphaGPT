@@ -7,6 +7,7 @@ import json
 import random
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import torch
@@ -59,6 +60,7 @@ class BinanceAlphaEngine:
         output_dir: str | Path = ".",
         config: BinanceMiningConfig | None = None,
         use_lord_regularization: bool = True,
+        loader: Any | None = None,
     ):
         self.seed = int(seed)
         self.config = config or BinanceMiningConfig()
@@ -66,8 +68,13 @@ class BinanceAlphaEngine:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.checkpoint_path = self.output_dir / "binance_training_checkpoint.pt"
         self._set_seed(self.seed)
-        self.loader = BinanceDataLoader(snapshot_id, symbols=symbols)
-        self.loader.load_data()
+        self.loader = loader or BinanceDataLoader(snapshot_id, symbols=symbols)
+        if getattr(self.loader, "feat_tensor", None) is None:
+            self.loader.load_data()
+        if self.loader.snapshot_id != snapshot_id:
+            raise ValueError("Injected Binance loader does not match the requested snapshot")
+        if symbols is not None and list(self.loader.symbols) != [item.upper() for item in symbols]:
+            raise ValueError("Injected Binance loader does not match the requested symbols")
         if len(self.loader.symbols) < 2:
             raise ValueError("Binance cross-sectional mining requires at least two symbols")
         self.model = AlphaGPT(vocab=BINANCE_FORMULA_VOCAB).to(ModelConfig.DEVICE)

@@ -173,3 +173,16 @@ and returns so formulas can be compared on the same data. Those arrays are not
 an account model: they do not persist cash, balances, positions, fills, or
 orders. AlphaGPT does not connect to a private Binance endpoint and does not
 provide a simulated or live trading service.
+
+## Offline Acceptance
+
+Run the deterministic synthetic dataset through short formula mining,
+validation selection, final evaluation, and artifact-schema checks:
+
+```bash
+python -m model_core.binance_acceptance
+```
+
+This command requires neither network access nor PostgreSQL. Its fixture is
+not research evidence; it exists only to verify that the complete workflow and
+artifact contracts function on a new machine.

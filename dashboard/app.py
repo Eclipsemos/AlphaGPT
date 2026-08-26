@@ -77,14 +77,14 @@ with tab_data:
     if coverage.empty:
         st.warning("No coverage rows found for this snapshot.")
     else:
-        st.plotly_chart(plot_coverage(coverage), use_container_width=True)
-        st.dataframe(coverage, use_container_width=True, hide_index=True)
+        st.plotly_chart(plot_coverage(coverage), width="stretch")
+        st.dataframe(coverage, width="stretch", hide_index=True)
     st.subheader("Latest Binance market bars")
     if market.empty:
         st.warning("No Binance market bars found in DB.")
     else:
-        st.plotly_chart(plot_market_scatter(market), use_container_width=True)
-        st.dataframe(market, use_container_width=True, hide_index=True)
+        st.plotly_chart(plot_market_scatter(market), width="stretch")
+        st.dataframe(market, width="stretch", hide_index=True)
 
 with tab_features:
     st.subheader("Feature schema")
@@ -118,7 +118,7 @@ with tab_runs:
     if not runs:
         st.info("No Binance research runs found under runs/binance/.")
     else:
-        st.dataframe(pd.DataFrame(runs), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(runs), width="stretch", hide_index=True)
         choices = [run["path"] for run in runs]
         selected_run = st.selectbox("Run artifact", choices)
         artifacts = svc.load_run_artifacts(selected_run)

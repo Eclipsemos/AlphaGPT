@@ -57,9 +57,22 @@ def run(
     symbols: list[str] | None = None,
 ) -> dict:
     artifact = json.loads(Path(formula_path).read_text())
-    formula = validate_formula_artifact(artifact, BINANCE_FORMULA_VOCAB)
     loader = BinanceDataLoader(snapshot_id, symbols=symbols)
     loader.load_data()
+    report = evaluate_artifact(artifact, loader, config, cost_scenarios)
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    return report
+
+
+def evaluate_artifact(
+    artifact: dict,
+    loader: BinanceDataLoader,
+    config: BinanceEvaluationConfig,
+    cost_scenarios: Sequence[float],
+) -> dict:
+    formula = validate_formula_artifact(artifact, BINANCE_FORMULA_VOCAB)
     validate_research_metadata(artifact, loader)
     vm = StackVM(BINANCE_FORMULA_VOCAB)
     if not vm.is_valid_formula(formula):
@@ -139,9 +152,6 @@ def run(
             name: value.as_dict() for name, value in sensitivity.items()
         },
     }
-    output = Path(output_path)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     return report
 
 

@@ -235,7 +235,15 @@ python -m unittest discover -s tests -v
 python -m compileall -q data_pipeline model_core dashboard tests
 ```
 
-The deterministic tests require no Binance API key, wallet, or private endpoint.
+Run the full synthetic acceptance workflow, including short mining and final
+report-schema verification:
+
+```bash
+python -m model_core.binance_acceptance
+```
+
+The acceptance fixture and deterministic tests require no PostgreSQL server,
+Binance API key, wallet, network access, or private endpoint.
 
 ## Known Limitations
 

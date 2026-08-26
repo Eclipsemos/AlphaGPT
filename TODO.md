@@ -133,7 +133,7 @@ The current milestone is B5; B0-B4 are usable research foundations.
 - [x] Update the dashboard to select a Binance dataset snapshot and show symbols instead of Solana addresses.
 - [x] Show dataset coverage, gaps, freshness, feature version, cost assumptions, and baseline comparisons.
 - [x] Remove wallet, SOL balance, Birdeye status, portfolio, and execution controls from the research dashboard.
-- [ ] Add an end-to-end acceptance command: build fixture dataset, mine a short batch, evaluate, and verify report schema.
+- [x] Add an end-to-end acceptance command: build fixture dataset, mine a short batch, evaluate, and verify report schema.
 - [x] Document the exact boundary between historical factor evaluation and prohibited simulated/live trading.
 
 ## B7: Research Hardening
