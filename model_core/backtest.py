@@ -6,7 +6,11 @@ import torch
 
 @dataclass(frozen=True)
 class BacktestReport:
-    """Aggregate metrics for a signal across the loaded token universe."""
+    """Aggregate equal-weight portfolio metrics across the loaded universe.
+
+    ``target_ret`` contains log-return labels for model training. Reports use
+    ``expm1(target_ret)`` and compound the resulting net simple returns.
+    """
 
     score: float
     cumulative_return: float
@@ -29,7 +33,14 @@ class MemeBacktest:
         self.min_liq = 500000.0
         self.base_fee = 0.0060
 
-    def _simulate(self, position: torch.Tensor, raw_data: dict[str, torch.Tensor], target_ret: torch.Tensor):
+    def _simulate(
+        self,
+        position: torch.Tensor,
+        raw_data: dict[str, torch.Tensor],
+        target_ret: torch.Tensor,
+        valid_mask: torch.Tensor,
+    ):
+        position = position * valid_mask.float()
         liquidity = raw_data["liquidity"]
         impact_slippage = self.trade_size / (liquidity + 1e-9)
         impact_slippage = torch.clamp(impact_slippage, 0.0, 0.05)
@@ -38,46 +49,68 @@ class MemeBacktest:
         previous[:, 0] = 0
         turnover = torch.abs(position - previous)
         fees = turnover * total_slippage_one_way
-        gross_pnl = position * target_ret
+        # Labels are log returns for stable model training; portfolio accounting
+        # must use simple returns before compounding and subtracting fees.
+        gross_pnl = position * torch.expm1(target_ret)
+        gross_pnl = torch.where(valid_mask, gross_pnl, torch.zeros_like(gross_pnl))
+        fees = torch.where(valid_mask, fees, torch.zeros_like(fees))
+        turnover = torch.where(valid_mask, turnover, torch.zeros_like(turnover))
         net_pnl = gross_pnl - fees
         return net_pnl, fees, turnover
 
-    def _report(self, position: torch.Tensor, raw_data: dict[str, torch.Tensor], target_ret: torch.Tensor) -> BacktestReport:
-        net_pnl, fees, turnover = self._simulate(position, raw_data, target_ret)
-        cumulative = net_pnl.sum(dim=1)
-        mean_bar_return = net_pnl.mean(dim=1)
-        volatility = net_pnl.std(dim=1, unbiased=False)
-        sharpe_values = torch.where(
+    def _report(
+        self,
+        position: torch.Tensor,
+        raw_data: dict[str, torch.Tensor],
+        target_ret: torch.Tensor,
+        valid_mask: torch.Tensor,
+    ) -> BacktestReport:
+        net_pnl, fees, turnover = self._simulate(position, raw_data, target_ret, valid_mask)
+
+        # Treat the token universe as an equal-weight portfolio. Missing or
+        # purged labels are excluded from that timestamp's denominator.
+        valid_count = valid_mask.float().sum(dim=0)
+        valid_time = valid_count > 0
+        portfolio_returns = torch.where(
+            valid_time,
+            net_pnl.sum(dim=0) / valid_count.clamp_min(1.0),
+            torch.zeros_like(valid_count),
+        )
+        returns = portfolio_returns[valid_time]
+        if returns.numel() == 0:
+            raise ValueError("No valid return labels available for backtest")
+        cumulative = torch.prod(1.0 + returns).sub(1.0)
+        volatility = returns.std(unbiased=False)
+        sharpe = torch.where(
             volatility > 1e-9,
-            mean_bar_return / volatility * math.sqrt(max(1, net_pnl.shape[1])),
+            returns.mean() / volatility * math.sqrt(max(1, returns.numel())),
             torch.zeros_like(volatility),
         )
-        equity = torch.cat([torch.zeros((net_pnl.shape[0], 1), device=net_pnl.device), net_pnl.cumsum(dim=1)], dim=1)
-        drawdown = equity - torch.cummax(equity, dim=1).values
-        max_drawdown = drawdown.min(dim=1).values
-        active_bars = position.sum(dim=1)
-        trades = turnover.sum(dim=1)
-        wins = (net_pnl > 0).float().sum(dim=1)
-        active = (position > 0).float().sum(dim=1)
-        win_rate = torch.where(active > 0, wins / active, torch.zeros_like(active))
-        big_drawdowns = (net_pnl < -0.05).float().sum(dim=1)
-        score_values = cumulative - big_drawdowns * 2.0
-        score_values = torch.where(active_bars < 5, torch.full_like(score_values, -10.0), score_values)
-
-        def median(values):
-            return float(torch.median(values).item())
+        equity = torch.cat([torch.ones((1,), device=returns.device), torch.cumprod(1.0 + returns, dim=0)])
+        drawdown = equity / torch.cummax(equity, dim=0).values - 1.0
+        max_drawdown = drawdown.min()
+        effective_position = position * valid_mask.float()
+        active_bars = effective_position.sum()
+        trades = turnover.sum()
+        wins = (net_pnl > 0).float().sum()
+        active = effective_position.sum()
+        win_rate = wins / active.clamp_min(1.0)
+        big_drawdowns = (returns < -0.05).float().sum()
+        score = cumulative - big_drawdowns * 2.0
+        if active_bars < 5:
+            score = torch.tensor(-10.0, device=returns.device)
 
         return BacktestReport(
-            score=median(score_values),
-            cumulative_return=float(cumulative.mean().item()),
-            volatility=float(volatility.mean().item()),
-            sharpe=median(sharpe_values),
-            max_drawdown=median(max_drawdown),
-            turnover=float(turnover.sum(dim=1).mean().item()),
-            trade_count=float(trades.mean().item()),
-            win_rate=float(win_rate.mean().item()),
-            fees=float(fees.sum(dim=1).mean().item()),
-            active_fraction=float((active_bars / max(1, position.shape[1])).mean().item()),
+            score=float(score.item()),
+            cumulative_return=float(cumulative.item()),
+            volatility=float(volatility.item()),
+            sharpe=float(sharpe.item()),
+            max_drawdown=float(max_drawdown.item()),
+            turnover=float(trades.item() / max(1, position.shape[0])),
+            trade_count=float(trades.item() / max(1, position.shape[0])),
+            win_rate=float(win_rate.item()),
+            fees=float(fees.sum().item() / max(1, position.shape[0])),
+            active_fraction=float(active_bars.item() / valid_mask.float().sum().clamp_min(1.0).item()),
         )
 
     def positions_from_factors(self, factors: torch.Tensor, raw_data: dict[str, torch.Tensor]) -> torch.Tensor:
@@ -85,15 +118,28 @@ class MemeBacktest:
         is_safe = (raw_data["liquidity"] > self.min_liq).float()
         return (signal > 0.85).float() * is_safe
 
-    def evaluate_report(self, factors: torch.Tensor, raw_data: dict[str, torch.Tensor], target_ret: torch.Tensor) -> BacktestReport:
+    def evaluate_report(
+        self,
+        factors: torch.Tensor,
+        raw_data: dict[str, torch.Tensor],
+        target_ret: torch.Tensor,
+        valid_mask: torch.Tensor | None = None,
+    ) -> BacktestReport:
         position = self.positions_from_factors(factors, raw_data)
-        return self._report(position, raw_data, target_ret)
+        valid_mask = torch.ones_like(target_ret, dtype=torch.bool) if valid_mask is None else valid_mask
+        return self._report(position, raw_data, target_ret, valid_mask)
 
-    def evaluate(self, factors: torch.Tensor, raw_data: dict[str, torch.Tensor], target_ret: torch.Tensor):
-        report = self.evaluate_report(factors, raw_data, target_ret)
+    def evaluate(self, factors: torch.Tensor, raw_data: dict[str, torch.Tensor], target_ret: torch.Tensor, valid_mask: torch.Tensor | None = None):
+        report = self.evaluate_report(factors, raw_data, target_ret, valid_mask)
         return torch.tensor(report.score, device=target_ret.device), report.cumulative_return
 
-    def baseline_reports(self, raw_data: dict[str, torch.Tensor], target_ret: torch.Tensor, seed: int = 0):
+    def baseline_reports(
+        self,
+        raw_data: dict[str, torch.Tensor],
+        target_ret: torch.Tensor,
+        seed: int = 0,
+        valid_mask: torch.Tensor | None = None,
+    ):
         liquidity = raw_data["liquidity"]
         safe = (liquidity > self.min_liq).float()
         close = raw_data["close"]
@@ -107,4 +153,5 @@ class MemeBacktest:
             "momentum": (close > previous_close).float() * safe,
             "random": (random_signal > 0.85).float() * safe,
         }
-        return {name: self._report(position, raw_data, target_ret) for name, position in positions.items()}
+        valid_mask = torch.ones_like(target_ret, dtype=torch.bool) if valid_mask is None else valid_mask
+        return {name: self._report(position, raw_data, target_ret, valid_mask) for name, position in positions.items()}

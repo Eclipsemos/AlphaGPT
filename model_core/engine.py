@@ -108,13 +108,13 @@ class AlphaEngine:
         self._set_seed(int(checkpoint.get('seed', self.seed)))
         print(f"Resuming from checkpoint at step {self.start_step}.")
 
-    def evaluate_formula(self, formula, feat_tensor, raw_data, target_ret):
+    def evaluate_formula(self, formula, feat_tensor, raw_data, target_ret, valid_mask):
         if formula is None:
             return float('-inf'), 0.0
         result = self.vm.execute(formula, feat_tensor)
         if result is None:
             return float('-inf'), 0.0
-        report = self.bt.evaluate_report(result, raw_data, target_ret)
+        report = self.bt.evaluate_report(result, raw_data, target_ret, valid_mask)
         return report.score, report.cumulative_return
 
     def train(self, resume=False):
@@ -170,6 +170,7 @@ class AlphaEngine:
                     res,
                     self.loader.train_raw_data_cache,
                     self.loader.train_target_ret,
+                    self.loader.train_target_valid,
                 )
                 rewards[i] = score if torch.isfinite(score) else -10.0
                 
@@ -219,12 +220,14 @@ class AlphaEngine:
                 self.loader.validation_feat_tensor,
                 self.loader.validation_raw_data_cache,
                 self.loader.validation_target_ret,
+                self.loader.validation_target_valid,
             )
             test_score, test_return = self.evaluate_formula(
                 self.best_formula,
                 self.loader.test_feat_tensor,
                 self.loader.test_raw_data_cache,
                 self.loader.test_target_ret,
+                self.loader.test_target_valid,
             )
             self.training_history['validation_score'].append(validation_score)
             self.training_history['validation_return'].append(validation_return)
@@ -254,17 +257,20 @@ class AlphaEngine:
                 validation_result,
                 self.loader.validation_raw_data_cache,
                 self.loader.validation_target_ret,
+                self.loader.validation_target_valid,
             ).as_dict(),
             "test": self.bt.evaluate_report(
                 test_result,
                 self.loader.test_raw_data_cache,
                 self.loader.test_target_ret,
+                self.loader.test_target_valid,
             ).as_dict(),
             "test_baselines": {
                 name: report.as_dict()
                 for name, report in self.bt.baseline_reports(
                     self.loader.test_raw_data_cache,
                     self.loader.test_target_ret,
+                    valid_mask=self.loader.test_target_valid,
                 ).items()
             },
         }
@@ -279,12 +285,14 @@ class AlphaEngine:
             self.loader.validation_feat_tensor,
             self.loader.validation_raw_data_cache,
             self.loader.validation_target_ret,
+            self.loader.validation_target_valid,
         )
         test_score, test_return = self.evaluate_formula(
             self.best_formula,
             self.loader.test_feat_tensor,
             self.loader.test_raw_data_cache,
             self.loader.test_target_ret,
+            self.loader.test_target_valid,
         )
         print(f"  Validation score/return: {validation_score:.4f} / {validation_return:.2%}")
         print(f"  Test score/return: {test_score:.4f} / {test_return:.2%}")

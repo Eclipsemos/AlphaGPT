@@ -22,7 +22,8 @@ def evaluate(formula, loader, windows):
         if factors is None:
             raise ValueError("Formula is invalid for a walk-forward window")
         target = loader.target_ret[:, test_slice]
-        report = backtest.evaluate_report(factors, raw, target)
+        valid = loader.target_valid[:, test_slice]
+        report = backtest.evaluate_report(factors, raw, target, valid)
         reports.append({
             "window": index,
             "train_end": train_end,

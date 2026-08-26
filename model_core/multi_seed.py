@@ -26,7 +26,9 @@ def run(formula_paths, output_path="multi_seed_report.json"):
         factors = vm.execute(formula, loader.test_feat_tensor)
         if factors is None:
             raise ValueError(f"Invalid formula in {path}")
-        report = backtest.evaluate_report(factors, loader.test_raw_data_cache, loader.test_target_ret)
+        report = backtest.evaluate_report(
+            factors, loader.test_raw_data_cache, loader.test_target_ret, loader.test_target_valid
+        )
         rows.append({"formula_path": path, **report.as_dict()})
     summary = {}
     for key in rows[0]:

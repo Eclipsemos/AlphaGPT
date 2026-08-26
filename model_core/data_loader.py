@@ -80,21 +80,34 @@ def inspect_market_data(frame: pd.DataFrame) -> DataQualityReport:
     )
 
 
-def compute_forward_returns(open_prices: torch.Tensor) -> torch.Tensor:
+def compute_forward_returns(
+    open_prices: torch.Tensor,
+    observed_mask: torch.Tensor | None = None,
+    *,
+    return_valid: bool = False,
+) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
     """Return from the next bar's open to the following bar's open.
 
     A signal observed at bar ``t`` is assumed to enter at ``t+1`` and hold
     through ``t+2``. The final two labels are purged because they cross the
-    available data boundary.
+    available data boundary. With ``observed_mask``, labels are also invalid
+    when the signal, entry, or exit candle was filled rather than observed.
     """
     next_open = torch.roll(open_prices, -1, dims=1)
     exit_open = torch.roll(open_prices, -2, dims=1)
-    valid = (next_open > 0) & (exit_open > 0)
+    valid = (open_prices > 0) & (next_open > 0) & (exit_open > 0)
+    if observed_mask is not None:
+        if observed_mask.shape != open_prices.shape:
+            raise ValueError("observed_mask must have the same shape as open_prices")
+        valid &= observed_mask
+        valid &= torch.roll(observed_mask, -1, dims=1)
+        valid &= torch.roll(observed_mask, -2, dims=1)
+    valid[:, -2:] = False
     ratio = torch.where(valid, exit_open / (next_open + 1e-9), torch.ones_like(next_open))
     forward_return = torch.where(valid, torch.log(ratio), torch.zeros_like(ratio))
     forward_return = torch.nan_to_num(forward_return, nan=0.0, posinf=0.0, neginf=0.0)
     forward_return[:, -2:] = 0.0
-    return forward_return
+    return (forward_return, valid) if return_valid else forward_return
 
 
 class CryptoDataLoader:
@@ -103,6 +116,7 @@ class CryptoDataLoader:
         self.feat_tensor = None
         self.raw_data_cache = None
         self.target_ret = None
+        self.target_valid = None
         self.addresses: list[str] = []
         self.times: list[Any] = []
         self.splits: TimeSplit | None = None
@@ -116,6 +130,9 @@ class CryptoDataLoader:
         self.train_target_ret = None
         self.validation_target_ret = None
         self.test_target_ret = None
+        self.train_target_valid = None
+        self.validation_target_valid = None
+        self.test_target_valid = None
 
     @staticmethod
     def _slice_raw(raw_data: dict[str, torch.Tensor], window: slice) -> dict[str, torch.Tensor]:
@@ -139,13 +156,19 @@ class CryptoDataLoader:
         self.train_raw_data_cache = self._slice_raw(self.raw_data_cache, self.splits.train)
         self.validation_raw_data_cache = self._slice_raw(self.raw_data_cache, self.splits.validation)
         self.test_raw_data_cache = self._slice_raw(self.raw_data_cache, self.splits.test)
-        self.train_target_ret = self.target_ret[:, self.splits.train]
-        self.validation_target_ret = self.target_ret[:, self.splits.validation]
-        self.test_target_ret = self.target_ret[:, self.splits.test]
+        self.train_target_ret = self.target_ret[:, self.splits.train].clone()
+        self.validation_target_ret = self.target_ret[:, self.splits.validation].clone()
+        self.test_target_ret = self.target_ret[:, self.splits.test].clone()
+        self.train_target_valid = self.target_valid[:, self.splits.train].clone()
+        self.validation_target_valid = self.target_valid[:, self.splits.validation].clone()
+        self.test_target_valid = self.target_valid[:, self.splits.test].clone()
         # The target uses the next two bars; purge labels that cross a split boundary.
         self.train_target_ret[:, -2:] = 0.0
         self.validation_target_ret[:, -2:] = 0.0
         self.test_target_ret[:, -2:] = 0.0
+        self.train_target_valid[:, -2:] = False
+        self.validation_target_valid[:, -2:] = False
+        self.test_target_valid[:, -2:] = False
 
     def load_data(self, limit_tokens=500):
         print("Loading data from SQL...")
@@ -172,6 +195,14 @@ class CryptoDataLoader:
 
         self.times = sorted(frame["time"].drop_duplicates().tolist())
 
+        observed_frame = frame.pivot(index="time", columns="address", values="open")
+        observed_frame = observed_frame.reindex(index=self.times, columns=self.addresses)
+        observed_mask = torch.tensor(
+            observed_frame.notna().values.T,
+            dtype=torch.bool,
+            device=ModelConfig.DEVICE,
+        )
+
         def to_tensor(col):
             pivot = frame.pivot(index="time", columns="address", values=col)
             pivot = pivot.reindex(index=self.times, columns=self.addresses)
@@ -183,7 +214,9 @@ class CryptoDataLoader:
         self.raw_data_cache = {key: to_tensor(key) for key in ("open", "high", "low", "close", "volume", "liquidity", "fdv")}
         train_end = int(self.raw_data_cache["open"].shape[1] * ModelConfig.TRAIN_RATIO)
         self.feat_tensor = FeatureEngineer.compute_features(self.raw_data_cache, fit_end=train_end)
-        self.target_ret = compute_forward_returns(self.raw_data_cache["open"])
+        self.target_ret, self.target_valid = compute_forward_returns(
+            self.raw_data_cache["open"], observed_mask, return_valid=True
+        )
         self.splits = self._build_splits(self.feat_tensor.shape[-1])
         self._assign_split_views()
         print(

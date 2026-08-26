@@ -25,21 +25,22 @@ def run(formula_path="best_meme_strategy.json", output_path="evaluation_report.j
     backtest = MemeBacktest()
 
     reports = {}
-    for name, features, raw_data, target in (
-        ("train", loader.train_feat_tensor, loader.train_raw_data_cache, loader.train_target_ret),
-        ("validation", loader.validation_feat_tensor, loader.validation_raw_data_cache, loader.validation_target_ret),
-        ("test", loader.test_feat_tensor, loader.test_raw_data_cache, loader.test_target_ret),
+    for name, features, raw_data, target, valid in (
+        ("train", loader.train_feat_tensor, loader.train_raw_data_cache, loader.train_target_ret, loader.train_target_valid),
+        ("validation", loader.validation_feat_tensor, loader.validation_raw_data_cache, loader.validation_target_ret, loader.validation_target_valid),
+        ("test", loader.test_feat_tensor, loader.test_raw_data_cache, loader.test_target_ret, loader.test_target_valid),
     ):
         factors = vm.execute(formula, features)
         if factors is None:
             raise ValueError(f"Formula is invalid for the {name} feature tensor")
-        reports[name] = backtest.evaluate_report(factors, raw_data, target).as_dict()
+        reports[name] = backtest.evaluate_report(factors, raw_data, target, valid).as_dict()
 
     reports["test_baselines"] = {
         name: report.as_dict()
         for name, report in backtest.baseline_reports(
             loader.test_raw_data_cache,
             loader.test_target_ret,
+            valid_mask=loader.test_target_valid,
         ).items()
     }
     reports["formula"] = formula

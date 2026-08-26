@@ -164,6 +164,12 @@ At minimum, a strategy needs:
 
 The repository does not provide all of these safeguards yet. Running more training steps alone does not solve that problem.
 
+Backtest reports use equal-weight portfolio returns. Forward labels remain log
+returns for numerical stability during training, then are converted with
+`expm1` before fees and compounding. Labels whose signal, entry, or exit candle
+was not observed are excluded from evaluation; they are not treated as zero
+return.
+
 ## Safety
 
 Do not run this command as part of the research workflow:

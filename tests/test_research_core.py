@@ -31,6 +31,29 @@ class ResearchCoreTests(unittest.TestCase):
         expected = torch.tensor([[torch.log(torch.tensor(22.0 / 11.0)), torch.log(torch.tensor(44.0 / 22.0)), torch.log(torch.tensor(88.0 / 44.0)), 0.0, 0.0]])
         self.assertTrue(torch.allclose(actual, expected))
 
+    def test_forward_returns_expose_valid_labels(self):
+        opens = torch.tensor([[10.0, 11.0, 22.0, 44.0, 88.0]])
+        returns, valid = compute_forward_returns(
+            opens,
+            torch.tensor([[True, True, False, True, True]]),
+            return_valid=True,
+        )
+        self.assertTrue(torch.equal(valid, torch.tensor([[False, False, False, False, False]])))
+        self.assertTrue(torch.isfinite(returns).all())
+
+    def test_backtest_compounds_simple_returns_from_log_labels(self):
+        raw = {
+            "liquidity": torch.full((1, 2), 1_000_000.0),
+            "close": torch.ones((1, 2)),
+        }
+        backtest = MemeBacktest()
+        backtest.trade_size = 0.0
+        backtest.base_fee = 0.0
+        factors = torch.full((1, 2), 10.0)
+        target = torch.full((1, 2), torch.log(torch.tensor(1.1)))
+        report = backtest.evaluate_report(factors, raw, target)
+        self.assertAlmostEqual(report.cumulative_return, 0.21, places=5)
+
     def test_quality_report_detects_bad_rows(self):
         frame = pd.DataFrame({
             "time": pd.to_datetime(["2026-01-01", "2026-01-01", "2026-01-02"]),
