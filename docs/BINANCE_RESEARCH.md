@@ -31,3 +31,22 @@ must never be mapped to Solana liquidity or FDV fields.
 All timestamps are timezone-aware UTC values. Numeric market values use
 PostgreSQL `NUMERIC` so exchange filters and source values are not silently
 rounded before feature tensors are built.
+
+The default REST host is Binance's public market-data endpoint,
+`data-api.binance.vision`. No Binance API key is read or sent.
+
+Discover the current universe without downloading bars:
+
+```bash
+python -m data_pipeline.run_binance_pipeline --dry-run
+```
+
+Build or resume the canonical dataset:
+
+```bash
+python -m data_pipeline.run_binance_pipeline
+```
+
+The command writes `runs/binance_latest/dataset_report.json`. A rerun resumes
+after the latest stored bar for each symbol, while primary-key upserts make
+overlapping responses idempotent.

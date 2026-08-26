@@ -44,15 +44,15 @@ research dashboard. A later phase must not hide an incomplete earlier phase.
 
 ## B1: Build the Binance Public-Data Pipeline
 
-- [ ] Add a read-only Binance Spot provider for `exchangeInfo`, `ticker/24hr`, and paginated `klines`.
+- [x] Add a read-only Binance Spot provider for `exchangeInfo`, `ticker/24hr`, and paginated `klines`.
 - [ ] Reuse the timestamp normalization, retry, pacing, and integrity-check patterns from `mmtick` without importing its trading code.
 - [ ] Add optional ingestion from `data.binance.vision` with SHA-256 verification for reproducible bulk history.
-- [ ] Normalize Binance timestamps to UTC and handle both millisecond and microsecond archive timestamps.
-- [ ] Store Binance instruments and bars in new tables; do not overload Solana `address`, `liquidity`, or `fdv` fields.
-- [ ] Make ingestion idempotent and safe to resume after interruption.
-- [ ] Persist raw-source metadata, retrieval time, requested range, response coverage, and archive checksum.
-- [ ] Add rate-limit handling for HTTP 429/418, `Retry-After`, exponential backoff, and a shared cooldown.
-- [ ] Add one command to build or incrementally refresh a Binance dataset snapshot.
+- [x] Normalize Binance timestamps to UTC and handle both millisecond and microsecond archive timestamps.
+- [x] Store Binance instruments and bars in new tables; do not overload Solana `address`, `liquidity`, or `fdv` fields.
+- [x] Make REST ingestion idempotent and safe to resume after interruption.
+- [x] Persist REST source metadata, retrieval time, requested range, and response coverage; reserve archive checksum storage for archive ingestion.
+- [x] Add rate-limit handling for HTTP 429/418, `Retry-After`, exponential backoff, and a shared cooldown.
+- [x] Add one command to build or incrementally refresh a Binance dataset snapshot.
 
 ## B2: Validate Dataset Quality and Reproducibility
 
