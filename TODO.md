@@ -66,13 +66,13 @@ research dashboard. A later phase must not hide an incomplete earlier phase.
 
 ## B3: Generalize Features for Binance
 
-- [ ] Replace Solana-specific liquidity/FDV features with exchange-neutral Binance features.
-- [ ] Define the first Binance feature vocabulary: returns, range/ATR, close position, momentum, realized volatility, base volume, quote volume, volume change, trade count, and taker-buy imbalance.
-- [ ] Fit every normalization parameter on the training split only and apply it unchanged to validation/test data.
-- [ ] Add warmup masks for rolling features so early incomplete windows cannot become valid samples.
+- [x] Replace Solana-specific liquidity/FDV features with exchange-neutral Binance features.
+- [x] Define the first Binance feature vocabulary: returns, range/ATR, close position, momentum, realized volatility, base volume, quote volume, volume change, trade count, and taker-buy imbalance.
+- [x] Fit every normalization parameter on the training split only and apply it unchanged to validation/test data.
+- [x] Add warmup masks for rolling features so early incomplete windows cannot become valid samples.
 - [ ] Record feature names, formulas, normalization state, and feature-code version in every run artifact.
-- [ ] Version formula vocabularies so old Solana formulas cannot be silently evaluated against Binance feature indices.
-- [ ] Add unit tests for each Binance feature and explicit no-future-data tests.
+- [x] Version formula vocabularies so old Solana formulas cannot be silently evaluated against Binance feature indices.
+- [x] Add unit tests for each Binance feature and explicit no-future-data tests.
 
 ## B4: Historical Factor Evaluation (No Trading Simulator)
 

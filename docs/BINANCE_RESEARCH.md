@@ -78,3 +78,21 @@ before AlphaGPT began collecting snapshots. Historical studies using the first
 snapshot therefore retain current-universe survivorship bias. Accumulating
 immutable point-in-time snapshots reduces this limitation prospectively; reports
 must not claim that the initial snapshot is survivorship-bias free.
+
+## Feature Vocabulary
+
+`binance-formula-v1` uses 11 ordered features: `RET_1H`, `RANGE`, `ATR_14`,
+`CLOSE_POSITION`, `MOMENTUM_24H`, `REALIZED_VOL_24H`, `LOG_BASE_VOLUME`,
+`LOG_QUOTE_VOLUME`, `QUOTE_VOLUME_CHANGE`, `LOG_TRADE_COUNT`, and
+`TAKER_BUY_IMBALANCE`.
+
+Features are causal. Rolling features remain invalid through their warmup and
+after missing input bars; the loader writes zero only as a tensor placeholder
+and keeps the corresponding feature/label mask false. It never forward-fills
+market values or labels. Per-symbol median/MAD normalization is fitted on the
+training split and then applied unchanged to validation and test data.
+
+Saved Binance formulas use a versioned artifact contract containing the market,
+formula vocabulary, token names, dataset snapshot ID, feature names, warmup
+rules, and normalization state. A legacy Solana formula or bare token list is
+not compatible with `binance-formula-v1`.

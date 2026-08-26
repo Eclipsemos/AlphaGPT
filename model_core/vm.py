@@ -1,10 +1,11 @@
 import torch
 from .ops import OPS_CONFIG
-from .vocab import FORMULA_VOCAB
+from .vocab import FORMULA_VOCAB, FormulaVocab
 
 class StackVM:
-    def __init__(self):
-        self.feat_offset = FORMULA_VOCAB.operator_offset
+    def __init__(self, vocab: FormulaVocab = FORMULA_VOCAB):
+        self.vocab = vocab
+        self.feat_offset = vocab.operator_offset
         self.op_map = {i + self.feat_offset: cfg[1] for i, cfg in enumerate(OPS_CONFIG)}
         self.arity_map = {i + self.feat_offset: cfg[2] for i, cfg in enumerate(OPS_CONFIG)}
 
@@ -43,7 +44,7 @@ class StackVM:
         depth = 0
         for raw_token in formula_tokens:
             token = int(raw_token)
-            if token < 0 or token >= FORMULA_VOCAB.size:
+            if token < 0 or token >= self.vocab.size:
                 return False
             if token < self.feat_offset:
                 depth += 1

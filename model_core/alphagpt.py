@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .config import ModelConfig
-from .vocab import FORMULA_VOCAB
+from .vocab import FORMULA_VOCAB, FormulaVocab
 
 
 class NewtonSchulzLowRankDecay:
@@ -219,14 +219,16 @@ class LoopedTransformer(nn.Module):
 
 
 class AlphaGPT(nn.Module):
-    def __init__(self):
+    def __init__(self, vocab: FormulaVocab = FORMULA_VOCAB):
         super().__init__()
         self.d_model = 64
-        self.features_list = list(FORMULA_VOCAB.feature_names)
-        self.ops_list = list(FORMULA_VOCAB.operator_names)
+        self.formula_vocab_version = vocab.version
+        self.market = vocab.market
+        self.features_list = list(vocab.feature_names)
+        self.ops_list = list(vocab.operator_names)
         
-        self.vocab = list(FORMULA_VOCAB.token_names)
-        self.vocab_size = FORMULA_VOCAB.size
+        self.vocab = list(vocab.token_names)
+        self.vocab_size = vocab.size
         
         # Embedding
         self.token_emb = nn.Embedding(self.vocab_size, self.d_model)
