@@ -152,20 +152,22 @@ st.caption(
 )
 
 snapshots = svc.list_snapshots()
-if snapshots.empty:
+snapshot_available = not snapshots.empty and "snapshot_id" in snapshots.columns
+if not snapshot_available:
     st.warning("尚未找到 Binance dataset snapshot。先运行 data_pipeline.run_binance_pipeline。")
-    st.stop()
 
-snapshot_options = snapshots["snapshot_id"].tolist()
-selected_snapshot = st.sidebar.selectbox("Dataset snapshot", snapshot_options)
+snapshot_options = snapshots["snapshot_id"].tolist() if snapshot_available else ["(no snapshot)"]
+selected_snapshot = st.sidebar.selectbox(
+    "Dataset snapshot", snapshot_options, disabled=not snapshot_available
+)
 st.sidebar.caption("研究范围：Binance Spot / USDT / 1h / public data")
 if st.sidebar.button("Refresh"):
     st.cache_resource.clear()
     st.rerun()
 
-payload = svc.snapshot_payload(selected_snapshot)
-status = svc.get_data_status(selected_snapshot)
-coverage = svc.get_snapshot_coverage(selected_snapshot)
+payload = svc.snapshot_payload(selected_snapshot) if snapshot_available else {}
+status = svc.get_data_status(selected_snapshot) if snapshot_available else svc.get_data_status()
+coverage = svc.get_snapshot_coverage(selected_snapshot) if snapshot_available else pd.DataFrame()
 market = svc.get_market_overview()
 runs = svc.latest_research_runs()
 

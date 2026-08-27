@@ -37,6 +37,25 @@ class ResearchCoreTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_dashboard_imports_without_a_configured_database(self):
+        root = Path(__file__).resolve().parents[1]
+        environment = {
+            "DB_HOST": "127.0.0.1",
+            "DB_PORT": "1",
+            "DB_USER": "missing",
+            "DB_PASSWORD": "missing",
+            "DB_NAME": "missing",
+        }
+        result = subprocess.run(
+            [sys.executable, "-c", "import app"],
+            cwd=root / "dashboard",
+            env={**__import__("os").environ, **environment},
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_repository_has_no_simulated_or_live_trading_modules(self):
         root = Path(__file__).resolve().parents[1]
         self.assertFalse((root / "execution").joinpath("trader.py").exists())
