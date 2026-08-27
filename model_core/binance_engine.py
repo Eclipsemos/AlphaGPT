@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -16,7 +17,7 @@ from tqdm import tqdm
 
 from .alphagpt import AlphaGPT, NewtonSchulzLowRankDecay
 from .binance_data_loader import BinanceDataLoader
-from .binance_mining import cross_sectional_ic_score
+from .binance_mining import cross_sectional_ic_scores
 from .config import ModelConfig
 from .formula_artifact import build_formula_artifact
 from .formula_canonical import canonical_formula
@@ -31,6 +32,9 @@ class BinanceMiningConfig:
     max_formula_length: int = 12
     validation_candidates_per_step: int = 8
     checkpoint_interval: int = 100
+    scoring_chunk_size: int = 64
+    candidate_pool_size: int = 256
+    profiling_interval: int = 25
     learning_rate: float = 1e-3
     minimum_cross_section: int = 10
 
@@ -41,6 +45,9 @@ class BinanceMiningConfig:
             self.max_formula_length,
             self.validation_candidates_per_step,
             self.checkpoint_interval,
+            self.scoring_chunk_size,
+            self.candidate_pool_size,
+            self.profiling_interval,
         ) <= 0:
             raise ValueError("Binance mining limits must be positive")
         if self.max_formula_length > ModelConfig.MAX_FORMULA_LEN:
@@ -200,36 +207,73 @@ class BinanceAlphaEngine:
             inputs = torch.cat([inputs, action.unsqueeze(1)], dim=1)
         return torch.stack(tokens, dim=1), log_probabilities
 
-    def _score_formula(self, formula: list[int], split: str) -> float:
+    @torch.no_grad()
+    def _score_formulas_batch(self, formulas: torch.Tensor, split: str) -> torch.Tensor:
         features = getattr(self.loader, f"{split}_feat_tensor")
         target = getattr(self.loader, f"{split}_target_ret")
-        valid = getattr(self.loader, f"{split}_target_valid")
-        factors = self.vm.execute(formula, features)
-        if factors is None or not torch.isfinite(factors).all():
-            return -10.0
-        score = cross_sectional_ic_score(
-            factors,
-            target,
-            valid,
-            minimum_cross_section=self.config.minimum_cross_section,
+        valid_labels = getattr(self.loader, f"{split}_target_valid")
+        if formulas.shape[0] == 0:
+            return features.new_empty((0,))
+        score_chunks: list[torch.Tensor] = []
+        chunk_size = self.config.scoring_chunk_size
+        for start in range(0, formulas.shape[0], chunk_size):
+            formula_chunk = formulas[start : start + chunk_size]
+            factors, valid_formulas = self.vm.execute_batch(
+                formula_chunk,
+                features,
+                chunk_size=chunk_size,
+            )
+            scores = cross_sectional_ic_scores(
+                factors,
+                target,
+                valid_labels,
+                minimum_cross_section=self.config.minimum_cross_section,
+            )
+            score_chunks.append(
+                torch.where(valid_formulas, scores, torch.full_like(scores, -10.0))
+            )
+        return torch.cat(score_chunks)
+
+    def _score_formula(self, formula: list[int], split: str) -> float:
+        values = self._score_formulas_batch(
+            torch.tensor([formula], dtype=torch.long, device=ModelConfig.DEVICE), split
         )
-        return float(score.item()) if torch.isfinite(score) else -10.0
+        return float(values[0].item())
 
     def _record_candidates(
         self,
         step: int,
-        formulas: list[tuple[float, list[int]]],
+        formulas: torch.Tensor,
+        train_scores: torch.Tensor,
     ) -> None:
-        formulas.sort(key=lambda item: (-item[0], item[1]))
-        checked = 0
-        for train_score, formula in formulas:
+        if train_scores.numel() == 0:
+            return
+        pool_size = min(self.config.candidate_pool_size, train_scores.shape[0])
+        pool_indices = torch.topk(train_scores, pool_size, sorted=True).indices
+        pool_scores = train_scores[pool_indices].detach().cpu().tolist()
+        pool_formulas = formulas[pool_indices].detach().cpu().tolist()
+        ranked = sorted(
+            zip(pool_scores, pool_formulas),
+            key=lambda item: (-item[0], item[1]),
+        )
+        pending: list[tuple[str, float, list[int]]] = []
+        for train_score, formula in ranked:
             try:
                 canonical = canonical_formula(formula, BINANCE_FORMULA_VOCAB)
             except ValueError:
                 continue
             if canonical in self.candidates:
                 continue
-            validation_score = self._score_formula(formula, "validation")
+            pending.append((canonical, train_score, formula))
+            if len(pending) >= self.config.validation_candidates_per_step:
+                break
+        if not pending:
+            return
+        scores = self._score_formulas_batch(
+            torch.tensor([item[2] for item in pending], dtype=torch.long, device=ModelConfig.DEVICE),
+            "validation",
+        ).detach().cpu().tolist()
+        for (canonical, train_score, formula), validation_score in zip(pending, scores):
             self.candidates[canonical] = {
                 "formula": formula,
                 "canonical_formula": canonical,
@@ -238,28 +282,42 @@ class BinanceAlphaEngine:
                 "first_seen_step": step,
                 "seed": self.seed,
             }
-            checked += 1
-            if checked >= self.config.validation_candidates_per_step:
-                break
 
     def train(self, *, resume: bool = False) -> dict:
         if resume:
             self.load_checkpoint()
         progress = tqdm(range(self.start_step, self.config.steps), desc="Binance factor mining")
         for step in progress:
-            sequences, log_probabilities = self._sample()
-            rewards = torch.full(
-                (self.config.batch_size,), -5.0, device=ModelConfig.DEVICE
+            profile_step = (
+                step == self.start_step
+                or (step + 1) % self.config.profiling_interval == 0
             )
-            valid_formulas: list[tuple[float, list[int]]] = []
-            for index in range(self.config.batch_size):
-                formula = sequences[index].tolist()
-                if not self.vm.is_valid_formula(formula):
-                    continue
-                score = self._score_formula(formula, "train")
-                rewards[index] = score
-                valid_formulas.append((score, formula))
-            self._record_candidates(step, valid_formulas)
+            timings_ms: dict[str, float] = {}
+            if profile_step and ModelConfig.DEVICE.type == "cuda":
+                torch.cuda.synchronize(ModelConfig.DEVICE)
+            stage_started = time.perf_counter()
+
+            def finish_stage(name: str) -> None:
+                nonlocal stage_started
+                if not profile_step:
+                    return
+                if ModelConfig.DEVICE.type == "cuda":
+                    torch.cuda.synchronize(ModelConfig.DEVICE)
+                now = time.perf_counter()
+                timings_ms[name] = (now - stage_started) * 1000.0
+                stage_started = now
+
+            sequences, log_probabilities = self._sample()
+            finish_stage("sampling")
+            rewards = torch.full((self.config.batch_size,), -5.0, device=ModelConfig.DEVICE)
+            valid_mask = self.vm.valid_formula_mask(sequences)
+            valid_sequences = sequences[valid_mask]
+            finish_stage("validity")
+            train_scores = self._score_formulas_batch(valid_sequences, "train")
+            rewards[valid_mask] = train_scores
+            finish_stage("vm_and_ic")
+            self._record_candidates(step, valid_sequences, train_scores)
+            finish_stage("candidate_validation")
             advantage = (rewards - rewards.mean()) / (rewards.std() + 1e-5)
             loss = sum(-value * advantage for value in log_probabilities).mean()
             if not torch.isfinite(loss):
@@ -268,21 +326,25 @@ class BinanceAlphaEngine:
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             self.optimizer.step()
+            finish_stage("backward_and_optimizer")
             if self.lord_optimizer is not None:
                 self.lord_optimizer.step()
+            finish_stage("lord")
+            valid_formula_count = int(valid_mask.sum().item())
             best_validation = max(
                 (item["validation_score"] for item in self.candidates.values()),
                 default=-10.0,
             )
-            self.history["steps"].append(
-                {
-                    "step": step,
-                    "average_reward": float(rewards.mean().item()),
-                    "valid_formula_count": len(valid_formulas),
-                    "unique_candidate_count": len(self.candidates),
-                    "best_validation_score": best_validation,
-                }
-            )
+            step_history = {
+                "step": step,
+                "average_reward": float(rewards.mean().item()),
+                "valid_formula_count": valid_formula_count,
+                "unique_candidate_count": len(self.candidates),
+                "best_validation_score": best_validation,
+            }
+            if profile_step:
+                step_history["timings_ms"] = timings_ms
+            self.history["steps"].append(step_history)
             if self.progress_callback is not None:
                 self.progress_callback(
                     {
@@ -290,7 +352,7 @@ class BinanceAlphaEngine:
                         "step": step + 1,
                         "steps": self.config.steps,
                         "average_reward": float(rewards.mean().item()),
-                        "valid_formula_count": len(valid_formulas),
+                        "valid_formula_count": valid_formula_count,
                         "unique_candidate_count": len(self.candidates),
                         "best_validation_score": best_validation,
                     }
@@ -391,6 +453,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=8192)
     parser.add_argument("--minimum-cross-section", type=int, default=10)
+    parser.add_argument("--scoring-chunk-size", type=int, default=64)
+    parser.add_argument("--profiling-interval", type=int, default=25)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--no-lord", action="store_true")
@@ -408,6 +472,8 @@ def main() -> None:
             steps=args.steps,
             batch_size=args.batch_size,
             minimum_cross_section=args.minimum_cross_section,
+            scoring_chunk_size=args.scoring_chunk_size,
+            profiling_interval=args.profiling_interval,
         ),
         use_lord_regularization=not args.no_lord,
     )

@@ -841,6 +841,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=8192)
     parser.add_argument("--minimum-cross-section", type=int, default=10)
+    parser.add_argument("--scoring-chunk-size", type=int, default=64)
+    parser.add_argument("--profiling-interval", type=int, default=25)
     parser.add_argument("--windows", type=int, default=4)
     parser.add_argument("--shortlist-size", type=int, default=25)
     parser.add_argument("--output-dir", type=Path, default=None)
@@ -871,6 +873,8 @@ def main(argv: Sequence[str] | None = None) -> None:
                 steps=args.steps,
                 batch_size=args.batch_size,
                 minimum_cross_section=args.minimum_cross_section,
+                scoring_chunk_size=args.scoring_chunk_size,
+                profiling_interval=args.profiling_interval,
             ),
             evaluation_config=BinanceEvaluationConfig(
                 max_positions=args.max_positions,
