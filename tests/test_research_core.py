@@ -71,6 +71,10 @@ class ResearchCoreTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             BinanceUniverseRules(minimum_quote_volume=Decimal("0"))
 
+    def test_binance_contract_rejects_invalid_minimum_universe(self):
+        with self.assertRaises(ValueError):
+            BinanceUniverseRules(minimum_symbols=0)
+
     def test_binance_schema_does_not_overload_solana_address(self):
         schema = "\n".join(binance_schema_statements())
         self.assertIn("market_instruments", schema)

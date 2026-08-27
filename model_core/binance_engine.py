@@ -32,6 +32,7 @@ class BinanceMiningConfig:
     validation_candidates_per_step: int = 8
     checkpoint_interval: int = 100
     learning_rate: float = 1e-3
+    minimum_cross_section: int = 10
 
     def __post_init__(self) -> None:
         if min(
@@ -48,6 +49,8 @@ class BinanceMiningConfig:
             )
         if self.learning_rate <= 0:
             raise ValueError("learning_rate must be positive")
+        if self.minimum_cross_section < 2:
+            raise ValueError("minimum_cross_section must be at least 2")
 
 
 class BinanceAlphaEngine:
@@ -76,8 +79,11 @@ class BinanceAlphaEngine:
             raise ValueError("Injected Binance loader does not match the requested snapshot")
         if symbols is not None and list(self.loader.symbols) != [item.upper() for item in symbols]:
             raise ValueError("Injected Binance loader does not match the requested symbols")
-        if len(self.loader.symbols) < 2:
-            raise ValueError("Binance cross-sectional mining requires at least two symbols")
+        if len(self.loader.symbols) < self.config.minimum_cross_section:
+            raise ValueError(
+                "Binance cross-sectional mining requires at least "
+                f"{self.config.minimum_cross_section} symbols"
+            )
         self.model = AlphaGPT(vocab=BINANCE_FORMULA_VOCAB).to(ModelConfig.DEVICE)
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(), lr=self.config.learning_rate
@@ -156,6 +162,7 @@ class BinanceAlphaEngine:
             "max_formula_length",
             "validation_candidates_per_step",
             "learning_rate",
+            "minimum_cross_section",
         ):
             if saved_config.get(key) != current_config[key]:
                 raise ValueError(f"Checkpoint is incompatible with mining config {key}")
@@ -200,7 +207,12 @@ class BinanceAlphaEngine:
         factors = self.vm.execute(formula, features)
         if factors is None or not torch.isfinite(factors).all():
             return -10.0
-        score = cross_sectional_ic_score(factors, target, valid)
+        score = cross_sectional_ic_score(
+            factors,
+            target,
+            valid,
+            minimum_cross_section=self.config.minimum_cross_section,
+        )
         return float(score.item()) if torch.isfinite(score) else -10.0
 
     def _record_candidates(
@@ -378,6 +390,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=8192)
+    parser.add_argument("--minimum-cross-section", type=int, default=10)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--no-lord", action="store_true")
@@ -391,7 +404,11 @@ def main() -> None:
         symbols=args.symbols,
         seed=args.seed,
         output_dir=args.output_dir,
-        config=BinanceMiningConfig(steps=args.steps, batch_size=args.batch_size),
+        config=BinanceMiningConfig(
+            steps=args.steps,
+            batch_size=args.batch_size,
+            minimum_cross_section=args.minimum_cross_section,
+        ),
         use_lord_regularization=not args.no_lord,
     )
     result = engine.train(resume=args.resume)

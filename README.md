@@ -123,13 +123,12 @@ psql "postgresql://alphagpt@127.0.0.1/crypto_quant" -c \
 
 ## Mine Factors
 
-First run a small-universe smoke test. The symbol subset becomes part of the
-formula artifact and must match later evaluation:
+Use the full snapshot universe for mining. The first release requires at least
+10 valid symbols at each timestamp; the default data pipeline targets 20 to 50:
 
 ```bash
 python -m model_core.binance_engine \
   --snapshot-id <snapshot-id> \
-  --symbols BTCUSDT,ETHUSDT \
   --seed 17 \
   --steps 1 \
   --batch-size 2048 \
@@ -141,7 +140,6 @@ Resume the same seed and compatible mining configuration:
 ```bash
 python -m model_core.binance_engine \
   --snapshot-id <snapshot-id> \
-  --symbols BTCUSDT,ETHUSDT \
   --seed 17 \
   --steps 1000 \
   --batch-size 2048 \

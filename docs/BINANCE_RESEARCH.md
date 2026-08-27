@@ -11,7 +11,8 @@ credentials.
 - Quote asset: `USDT`
 - Bar interval: `1h`
 - History: at least 365 days
-- Universe size: at most 50 symbols
+- Universe size: 20 to 50 symbols by default
+- Factor scoring requires at least 10 valid symbols at each timestamp
 - Minimum listing age: 30 days
 - Minimum 24-hour quote volume: 10,000,000 USDT
 - Exclusions: stable quote-like base assets and leveraged-token suffixes

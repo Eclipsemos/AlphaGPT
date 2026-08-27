@@ -35,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--end-time", type=parse_datetime, help="UTC ISO timestamp; defaults to the latest completed hour")
     parser.add_argument("--history-days", type=int, default=None)
     parser.add_argument("--max-symbols", type=int, default=None)
+    parser.add_argument("--minimum-symbols", type=int, default=None)
     parser.add_argument("--candidate-multiplier", type=int, default=2)
     parser.add_argument("--base-url", default=Config.BINANCE_BASE_URL)
     parser.add_argument(
@@ -81,11 +82,20 @@ def current_code_version() -> str:
 
 async def run(args: argparse.Namespace) -> dict[str, object]:
     rules = Config.BINANCE_RULES
-    if args.history_days is not None or args.max_symbols is not None:
+    if (
+        args.history_days is not None
+        or args.max_symbols is not None
+        or args.minimum_symbols is not None
+    ):
         rules = replace(
             rules,
             history_days=args.history_days if args.history_days is not None else rules.history_days,
             max_symbols=args.max_symbols if args.max_symbols is not None else rules.max_symbols,
+            minimum_symbols=(
+                args.minimum_symbols
+                if args.minimum_symbols is not None
+                else rules.minimum_symbols
+            ),
         )
     end_time = completed_hour(args.end_time or datetime.now(UTC))
     start_time = completed_hour(args.start_time or (end_time - timedelta(days=rules.history_days)))
@@ -113,6 +123,12 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
             instruments = instruments[: rules.max_symbols]
             if not instruments:
                 raise RuntimeError("Binance discovery returned no instruments matching the configured rules")
+            if len(instruments) < rules.minimum_symbols:
+                raise RuntimeError(
+                    f"Binance discovery returned {len(instruments)} instruments, below the "
+                    f"configured minimum of {rules.minimum_symbols}; lower the volume "
+                    "threshold or collect a broader universe"
+                )
             await db.upsert_market_instruments(instruments)
             symbols = [item.symbol for item in instruments]
             canonical = dataset_snapshot_payload(

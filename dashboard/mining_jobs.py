@@ -39,6 +39,7 @@ class MiningJobConfig:
     slippage_bps: float = 5.0
     portfolio_notional_usd: float = 100_000.0
     minimum_quote_volume_usd: float = 0.0
+    minimum_cross_section: int = 10
     use_lord_regularization: bool = True
 
     def __post_init__(self) -> None:
@@ -52,6 +53,8 @@ class MiningJobConfig:
             raise ValueError("at most 20 seeds are allowed")
         if min(self.steps, self.batch_size, self.windows, self.shortlist_size) <= 0:
             raise ValueError("steps, batch size, windows, and shortlist size must be positive")
+        if self.minimum_cross_section < 10:
+            raise ValueError("dashboard mining requires at least 10 cross-sectional symbols")
         if self.steps > 100_000 or self.batch_size > 65_536:
             raise ValueError("requested mining workload exceeds the dashboard limit")
         if self.weighting not in {"equal", "risk"}:

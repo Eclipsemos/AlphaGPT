@@ -556,8 +556,11 @@ def run_batch(
         raise ValueError("Batch loader does not match the requested snapshot")
     if symbols is not None and list(loader.symbols) != [item.upper() for item in symbols]:
         raise ValueError("Batch loader does not match the requested symbols")
-    if len(loader.symbols) < 2:
-        raise ValueError("Binance batch research requires at least two symbols")
+    if len(loader.symbols) < mining_config.minimum_cross_section:
+        raise ValueError(
+            "Binance batch research requires at least "
+            f"{mining_config.minimum_cross_section} symbols"
+        )
     if "BTCUSDT" not in loader.symbols:
         raise ValueError("BTCUSDT must be present for the fixed reference baseline")
     manifest = {
@@ -837,6 +840,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seeds", type=parse_seeds, default=list(DEFAULT_SEEDS))
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=8192)
+    parser.add_argument("--minimum-cross-section", type=int, default=10)
     parser.add_argument("--windows", type=int, default=4)
     parser.add_argument("--shortlist-size", type=int, default=25)
     parser.add_argument("--output-dir", type=Path, default=None)
@@ -863,7 +867,11 @@ def main(argv: Sequence[str] | None = None) -> None:
             symbols=args.symbols,
             seeds=args.seeds,
             output_dir=args.output_dir or default_output_dir(),
-            mining_config=BinanceMiningConfig(steps=args.steps, batch_size=args.batch_size),
+            mining_config=BinanceMiningConfig(
+                steps=args.steps,
+                batch_size=args.batch_size,
+                minimum_cross_section=args.minimum_cross_section,
+            ),
             evaluation_config=BinanceEvaluationConfig(
                 max_positions=args.max_positions,
                 weighting=args.weighting,
@@ -873,6 +881,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 slippage_bps=args.slippage_bps,
                 portfolio_notional_usd=args.portfolio_notional_usd,
                 minimum_quote_volume_usd=args.minimum_quote_volume_usd,
+                minimum_cross_section=args.minimum_cross_section,
             ),
             window_count=args.windows,
             shortlist_size=args.shortlist_size,

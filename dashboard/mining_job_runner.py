@@ -57,6 +57,7 @@ def run_job(job_id: str, *, project_root: str | Path | None = None) -> None:
             mining_config=BinanceMiningConfig(
                 steps=config.steps,
                 batch_size=config.batch_size,
+                minimum_cross_section=config.minimum_cross_section,
             ),
             evaluation_config=BinanceEvaluationConfig(
                 max_positions=config.max_positions,
@@ -67,6 +68,7 @@ def run_job(job_id: str, *, project_root: str | Path | None = None) -> None:
                 slippage_bps=config.slippage_bps,
                 portfolio_notional_usd=config.portfolio_notional_usd,
                 minimum_quote_volume_usd=config.minimum_quote_volume_usd,
+                minimum_cross_section=config.minimum_cross_section,
             ),
             window_count=config.windows,
             shortlist_size=config.shortlist_size,

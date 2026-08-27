@@ -23,6 +23,7 @@ class BinanceEvaluationConfig:
     slippage_bps: float = 5.0
     portfolio_notional_usd: float = 100_000.0
     minimum_quote_volume_usd: float = 0.0
+    minimum_cross_section: int = 10
 
     def __post_init__(self) -> None:
         if self.interval != "1h":
@@ -39,6 +40,8 @@ class BinanceEvaluationConfig:
             raise ValueError("portfolio_notional_usd must be positive")
         if self.minimum_quote_volume_usd < 0:
             raise ValueError("minimum_quote_volume_usd cannot be negative")
+        if self.minimum_cross_section < 2:
+            raise ValueError("minimum_cross_section must be at least 2")
 
     @property
     def fee_rate(self) -> float:
@@ -149,7 +152,12 @@ class BinanceFactorEvaluator:
             trade_notional / quote_volume,
             torch.zeros_like(trade_notional),
         )
-        rank_ic = mean_rank_ic(factors, target_log_returns, return_valid & signal_valid)
+        rank_ic = mean_rank_ic(
+            factors,
+            target_log_returns,
+            return_valid & signal_valid,
+            minimum_cross_section=self.config.minimum_cross_section,
+        )
         score = sharpe - 0.5 * torch.abs(max_drawdown)
         net_by_symbol = gross_by_symbol - fee_cost_by_symbol - slippage_cost_by_symbol
         symbol_contributions = torch.abs(net_by_symbol.sum(dim=1))
@@ -307,11 +315,15 @@ def mean_rank_ic(
     factors: torch.Tensor,
     target_log_returns: torch.Tensor,
     valid: torch.Tensor,
+    *,
+    minimum_cross_section: int = 10,
 ) -> float:
+    if minimum_cross_section < 2:
+        raise ValueError("minimum_cross_section must be at least 2")
     values: list[torch.Tensor] = []
     for index in range(factors.shape[1]):
         mask = valid[:, index] & torch.isfinite(factors[:, index])
-        if int(mask.sum()) < 2:
+        if int(mask.sum()) < minimum_cross_section:
             continue
         factor = factors[mask, index]
         target = target_log_returns[mask, index]

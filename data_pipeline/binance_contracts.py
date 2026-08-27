@@ -22,6 +22,7 @@ class BinanceUniverseRules:
     interval: str = "1h"
     history_days: int = 365
     max_symbols: int = 50
+    minimum_symbols: int = 20
     minimum_listing_days: int = 30
     minimum_quote_volume: Decimal = Decimal("10000000")
     excluded_base_assets: tuple[str, ...] = (
@@ -44,7 +45,7 @@ class BinanceUniverseRules:
             raise ValueError("The canonical Binance research interval is 1h")
         if self.history_days < 365:
             raise ValueError("Binance research history must cover at least one year")
-        if self.max_symbols <= 0 or self.minimum_listing_days <= 0:
+        if self.max_symbols <= 0 or self.minimum_symbols <= 0 or self.minimum_listing_days <= 0:
             raise ValueError("Universe limits must be positive")
         if self.minimum_quote_volume <= 0:
             raise ValueError("minimum_quote_volume must be positive")

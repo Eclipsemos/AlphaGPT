@@ -11,7 +11,9 @@ from model_core.vocab import BINANCE_FORMULA_VOCAB
 
 class BinanceMiningTests(unittest.TestCase):
     def test_cross_sectional_ic_rewards_predictive_and_rejects_constant_factors(self):
-        target = torch.tensor([[0.1, -0.1], [0.2, 0.0], [0.3, 0.1]])
+        target = torch.tensor(
+            [[0.1, -0.1], [0.2, 0.0], [0.3, 0.1], [0.0, 0.2], [-0.2, 0.3], [0.4, -0.3], [0.5, 0.4], [-0.1, 0.5], [0.6, -0.4], [0.7, 0.6]]
+        )
         valid = torch.ones_like(target, dtype=torch.bool)
         positive = cross_sectional_ic_score(target, target, valid)
         negative = cross_sectional_ic_score(-target, target, valid)
@@ -19,6 +21,20 @@ class BinanceMiningTests(unittest.TestCase):
         self.assertGreater(float(positive), 0)
         self.assertLess(float(negative), 0)
         self.assertEqual(float(constant), -10.0)
+
+    def test_cross_sectional_ic_requires_configured_sample_and_does_not_saturate(self):
+        factors = torch.tensor([[0.1, 0.2], [0.2, 0.1], [0.3, 0.4]])
+        target = torch.tensor([[0.2, 0.1], [0.1, 0.3], [0.3, 0.2]])
+        valid = torch.ones_like(factors, dtype=torch.bool)
+        score = cross_sectional_ic_score(
+            factors, target, valid, minimum_cross_section=3
+        )
+        self.assertGreaterEqual(float(score), -1.0)
+        self.assertLessEqual(float(score), 1.0)
+        too_small = cross_sectional_ic_score(
+            factors[:2], target[:2], valid[:2], minimum_cross_section=3
+        )
+        self.assertEqual(float(too_small), -10.0)
 
     def test_canonical_formula_deduplicates_commutative_children(self):
         add = BINANCE_FORMULA_VOCAB.operator_offset
@@ -41,6 +57,8 @@ class BinanceMiningTests(unittest.TestCase):
     def test_mining_config_and_symbol_parser_reject_invalid_values(self):
         with self.assertRaises(ValueError):
             BinanceMiningConfig(steps=0)
+        with self.assertRaises(ValueError):
+            BinanceMiningConfig(minimum_cross_section=1)
         self.assertEqual(parse_symbols("btcusdt, ETHUSDT"), ["BTCUSDT", "ETHUSDT"])
         with self.assertRaises(Exception):
             parse_symbols("BTCUSDT,BTCUSDT")

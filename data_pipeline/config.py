@@ -34,6 +34,7 @@ class Config:
     BINANCE_RULES = BinanceUniverseRules(
         history_days=int(os.getenv("BINANCE_HISTORY_DAYS", "365")),
         max_symbols=int(os.getenv("BINANCE_MAX_SYMBOLS", "50")),
+        minimum_symbols=int(os.getenv("BINANCE_MIN_SYMBOLS", "20")),
         minimum_listing_days=int(os.getenv("BINANCE_MIN_LISTING_DAYS", "30")),
         minimum_quote_volume=Decimal(os.getenv("BINANCE_MIN_QUOTE_VOLUME", "10000000")),
     )

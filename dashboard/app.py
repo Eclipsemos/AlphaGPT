@@ -233,6 +233,13 @@ with tab_features:
 
 with tab_mining:
     st.subheader("GPU factor mining")
+    selected_symbol_count = len(payload.get("symbols", []))
+    if selected_symbol_count < 10:
+        st.error(
+            f"Selected snapshot has {selected_symbol_count} symbols. "
+            "Mining requires at least 10 valid cross-sectional symbols; rebuild "
+            "the dataset with the default 20-symbol universe."
+        )
     if _control_authorized():
         lock_col, scope_col = st.columns([1, 4])
         if lock_col.button("Lock controls"):
@@ -257,6 +264,7 @@ with tab_mining:
             weighting = config_middle.segmented_control(
                 "Historical weighting", ["equal", "risk"], default="equal"
             )
+            config_middle.caption("Minimum valid cross-section: 10 symbols")
 
             rebalance_hours = config_right.number_input("Rebalance hours", 1, 168, 24)
             taker_fee_bps = config_right.number_input("Assumed fee (bps)", 0.0, 100.0, 10.0, 1.0)
@@ -266,7 +274,7 @@ with tab_mining:
             submitted = st.form_submit_button(
                 "Start mining batch",
                 type="primary",
-                disabled=bool(active_jobs),
+                disabled=bool(active_jobs) or selected_symbol_count < 10,
             )
         if active_jobs:
             st.info(f"Job `{active_jobs[0]['job_id']}` is active. Only one GPU batch can run at a time.")
@@ -285,6 +293,7 @@ with tab_mining:
                     risk_lookback_hours=24,
                     taker_fee_bps=float(taker_fee_bps),
                     slippage_bps=float(slippage_bps),
+                    minimum_cross_section=10,
                     use_lord_regularization=bool(use_lord),
                 )
                 job_manager.start_job(config)

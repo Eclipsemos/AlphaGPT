@@ -188,6 +188,11 @@ class BinanceProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(instrument_matches_rules(recent, rules, as_of=as_of))
         self.assertFalse(instrument_matches_rules(leveraged, rules, as_of=as_of))
 
+    def test_default_universe_requires_broad_cross_section(self):
+        rules = BinanceUniverseRules()
+        self.assertEqual(rules.max_symbols, 50)
+        self.assertEqual(rules.minimum_symbols, 20)
+
     async def test_discovery_uses_onboard_date_and_volume_order(self):
         as_of = datetime(2026, 1, 1, tzinfo=UTC)
         session = FakeSession([
