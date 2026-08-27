@@ -161,6 +161,7 @@ python -m model_core.binance_batch \
   --seeds 1,2,3,4,5 \
   --steps 1000 \
   --batch-size 8192 \
+  --minimum-cross-section 10 \
   --windows 4
 ```
 

@@ -125,6 +125,8 @@ The current milestone is B7 research hardening; B0-B6 are implemented.
 - [x] Candidate selection code cannot read test tensors before the final evaluation stage.
 - [x] The report rejects candidates that fail validation, window stability, baseline, cost, or capacity criteria.
 - [x] A positive test return alone can never produce `promising` status.
+- [x] Reject production research batches whose universe or per-timestamp valid cross-section is too small for meaningful IC.
+- [x] Keep IC rewards on their native bounded scale instead of amplifying degenerate cross-sections into saturated scores.
 
 ## B6: Documentation and Dashboard
 
@@ -148,6 +150,7 @@ The current milestone is B7 research hardening; B0-B6 are implemented.
 - [x] Add regime slices for trend, drawdown, high volatility, and low volatility without selecting regimes using future data.
 - [x] Measure formula complexity and reject unstable formulas whose results depend on a few symbols or time periods.
 - [x] Add deterministic fixture CI that requires no Binance API key, wallet, database account, or network access.
+- [x] Expand the live default universe gate to 20-50 symbols and expose the minimum cross-section in all research artifacts.
 
 ## Definition of Done
 

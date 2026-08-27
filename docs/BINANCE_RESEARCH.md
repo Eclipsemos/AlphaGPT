@@ -15,12 +15,17 @@ credentials.
 - Factor scoring requires at least 10 valid symbols at each timestamp
 - Minimum listing age: 30 days
 - Minimum 24-hour quote volume: 10,000,000 USDT
-- Exclusions: stable quote-like base assets and leveraged-token suffixes
+- Exclusions: stable/fiat-like base assets and leveraged-token suffixes
 
 The universe is sorted deterministically after filtering and persisted in an
 immutable dataset snapshot. A snapshot ID is the SHA-256 of its canonical JSON
 payload, including rules, symbols, time range, source, schema versions, and code
 version.
+
+Production mining defaults to `minimum_cross_section=10`: a timestamp is not
+eligible for IC scoring or rank-IC reporting unless at least ten symbols have
+valid features and forward-return labels. Offline fixtures may set a smaller
+explicit value for deterministic tests only.
 
 ## Storage
 
